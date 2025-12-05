@@ -1,336 +1,286 @@
 import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Copy, Trash2, User, Car, MapPin, FileText, Clock } from "lucide-react";
-import { toast } from "sonner";
+import { PersonalTabelle } from "@/components/leitstelle/PersonalTabelle";
+import { StreifeKarte } from "@/components/leitstelle/StreifeKarte";
+import { CodesTabelle } from "@/components/leitstelle/CodesTabelle";
+import { DienstStatusInfo } from "@/components/leitstelle/DienstStatusInfo";
+import { dienstStatusOptionen, tenCodes, codes } from "@/data/leitstellenData";
+import { Checkbox } from "@/components/ui/checkbox";
 
-interface Formular {
-  einsatznummer: string;
-  datum: string;
-  uhrzeit: string;
-  beamter: string;
-  dienstnummer: string;
-  verdaechtiger: string;
-  geburtsdatum: string;
-  telefon: string;
-  fahrzeug: string;
-  kennzeichen: string;
-  tatort: string;
-  tatzeit: string;
-  sachverhalt: string;
-  massnahmen: string;
-  status: string;
-}
+// Helper to create empty rows
+const createEmptyRows = (count: number, prefix: string) =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `${prefix}-${i}`,
+    rangDnName: "",
+    hinweis: "",
+    status: "-",
+  }));
 
-const initialFormular: Formular = {
-  einsatznummer: "",
-  datum: new Date().toISOString().split("T")[0],
-  uhrzeit: new Date().toTimeString().slice(0, 5),
-  beamter: "",
-  dienstnummer: "",
-  verdaechtiger: "",
-  geburtsdatum: "",
-  telefon: "",
-  fahrzeug: "",
-  kennzeichen: "",
-  tatort: "",
-  tatzeit: "",
-  sachverhalt: "",
-  massnahmen: "",
-  status: "offen",
-};
+const createEmptyStreife = (id: string) => ({
+  fahrzeug: "Charger",
+  fahrzeugStatus: "-",
+  fahrer: "",
+  funker: "",
+  beifahrer: "",
+});
 
 export default function Leitstellenblatt() {
-  const [formular, setFormular] = useState<Formular>(initialFormular);
+  const [dienstStatus, setDienstStatus] = useState("normal");
+  const [leitstelleLeiter, setLeitstelleLeiter] = useState("");
+  const [leitstelleStellvertreter, setLeitstelleStellvertreter] = useState("");
+  const [supervisorLeiter, setSupervisorLeiter] = useState("");
+  const [supervisorStellvertreter, setSupervisorStellvertreter] = useState("");
+  const [hinweise, setHinweise] = useState("");
 
-  const handleChange = (field: keyof Formular, value: string) => {
-    setFormular((prev) => ({ ...prev, [field]: value }));
+  // Personal Tabellen State
+  const [leitung, setLeitung] = useState(createEmptyRows(4, "leitung"));
+  const [detectives, setDetectives] = useState(createEmptyRows(10, "det"));
+  const [seniorOfficer, setSeniorOfficer] = useState(createEmptyRows(10, "so"));
+  const [officer, setOfficer] = useState(createEmptyRows(10, "off"));
+  const [rookies, setRookies] = useState(createEmptyRows(10, "rook"));
+
+  // Streifen State
+  const [streifen, setStreifen] = useState({
+    adam1: createEmptyStreife("adam1"),
+    adam2: createEmptyStreife("adam2"),
+    adam3: createEmptyStreife("adam3"),
+    adam4: createEmptyStreife("adam4"),
+    adam5: createEmptyStreife("adam5"),
+    lincoln1: createEmptyStreife("lincoln1"),
+    lincoln2: createEmptyStreife("lincoln2"),
+    phoenix: createEmptyStreife("phoenix"),
+    henry1: createEmptyStreife("henry1"),
+    adam1000: createEmptyStreife("adam1000"),
+  });
+
+  const updatePersonal = (
+    setter: React.Dispatch<React.SetStateAction<any[]>>,
+    id: string,
+    field: string,
+    value: string
+  ) => {
+    setter((prev) =>
+      prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+    );
   };
 
-  const handleClear = () => {
-    setFormular({
-      ...initialFormular,
-      datum: new Date().toISOString().split("T")[0],
-      uhrzeit: new Date().toTimeString().slice(0, 5),
-    });
-    toast.success("Formular zurückgesetzt");
-  };
-
-  const handleCopy = () => {
-    const text = `=== LSPD LEITSTELLENBLATT ===
-
-EINSATZ-INFORMATIONEN
-Einsatznummer: ${formular.einsatznummer}
-Datum: ${formular.datum}
-Uhrzeit: ${formular.uhrzeit}
-Status: ${formular.status.toUpperCase()}
-
-BEAMTER
-Name: ${formular.beamter}
-Dienstnummer: ${formular.dienstnummer}
-
-VERDÄCHTIGER/BETEILIGTER
-Name: ${formular.verdaechtiger}
-Geburtsdatum: ${formular.geburtsdatum}
-Telefon: ${formular.telefon}
-
-FAHRZEUG
-Fahrzeug: ${formular.fahrzeug}
-Kennzeichen: ${formular.kennzeichen}
-
-TATORT & TATZEIT
-Ort: ${formular.tatort}
-Zeit: ${formular.tatzeit}
-
-SACHVERHALT
-${formular.sachverhalt}
-
-MASSNAHMEN
-${formular.massnahmen}
-
-===========================`;
-
-    navigator.clipboard.writeText(text);
-    toast.success("Leitstellenblatt kopiert!");
+  const updateStreife = (streifeId: string, field: string, value: string) => {
+    setStreifen((prev) => ({
+      ...prev,
+      [streifeId]: { ...prev[streifeId as keyof typeof prev], [field]: value },
+    }));
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Leitstellenblatt</h1>
-          <p className="text-sm text-muted-foreground">Einsatz-Dokumentation</p>
+    <div className="p-4 space-y-6 max-w-[1800px] mx-auto">
+      {/* Header */}
+      <div className="bg-primary text-primary-foreground py-4 px-6 rounded-lg text-center">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-wider">
+          LOS SANTOS POLICE DEPARTMENT - To Protect and to Serve
+        </h1>
+      </div>
+
+      {/* Leitstelle & Dienst Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Leitstelle */}
+        <div className="space-y-2">
+          <div className="bg-cyan-600 text-primary-foreground px-3 py-2 rounded-t font-bold text-center">
+            LEITSTELLE - ADAM 100
+          </div>
+          <div className="bg-card border border-border rounded-b p-2 space-y-2">
+            <div className="grid grid-cols-3 gap-2 items-center">
+              <span className="text-sm">Leiter</span>
+              <Input
+                value={leitstelleLeiter}
+                onChange={(e) => setLeitstelleLeiter(e.target.value)}
+                className="col-span-2 h-8"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2 items-center">
+              <span className="text-sm">Stellvertreter</span>
+              <Input
+                value={leitstelleStellvertreter}
+                onChange={(e) => setLeitstelleStellvertreter(e.target.value)}
+                className="col-span-2 h-8"
+              />
+            </div>
+          </div>
+
+          <div className="bg-orange-600 text-primary-foreground px-3 py-2 font-bold text-center text-sm">
+            Supervisor / Führungsebene - ADAM 1000
+          </div>
+          <div className="bg-card border border-border rounded-b p-2 space-y-2">
+            <div className="grid grid-cols-3 gap-2 items-center">
+              <span className="text-sm">Leiter</span>
+              <Input
+                value={supervisorLeiter}
+                onChange={(e) => setSupervisorLeiter(e.target.value)}
+                className="col-span-2 h-8"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2 items-center">
+              <span className="text-sm">Stellvertreter</span>
+              <Input
+                value={supervisorStellvertreter}
+                onChange={(e) => setSupervisorStellvertreter(e.target.value)}
+                className="col-span-2 h-8"
+              />
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleClear}>
-            <Trash2 className="w-4 h-4 mr-2" />
-            Zurücksetzen
-          </Button>
-          <Button onClick={handleCopy} className="glow-primary">
-            <Copy className="w-4 h-4 mr-2" />
-            Kopieren
-          </Button>
+
+        {/* Dienst Status */}
+        <div className="space-y-2">
+          <div className="bg-cyan-700 text-primary-foreground px-3 py-2 rounded-t font-bold text-center">
+            DIENST STATUS
+          </div>
+          <div className="bg-card border border-border rounded-b p-2 space-y-1">
+            {dienstStatusOptionen.map((opt) => (
+              <label
+                key={opt.value}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded cursor-pointer transition-colors ${
+                  dienstStatus === opt.value
+                    ? "bg-primary/20 border border-primary"
+                    : "hover:bg-secondary/50"
+                }`}
+              >
+                <Checkbox
+                  checked={dienstStatus === opt.value}
+                  onCheckedChange={() => setDienstStatus(opt.value)}
+                />
+                <span className="text-sm font-medium">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Hinweise */}
+        <div className="space-y-2">
+          <div className="bg-destructive text-destructive-foreground px-3 py-2 rounded-t font-bold text-center">
+            Hinweise
+          </div>
+          <Textarea
+            value={hinweise}
+            onChange={(e) => setHinweise(e.target.value)}
+            className="min-h-[200px] bg-card border-border"
+            placeholder="Wichtige Hinweise für die Schicht..."
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Einsatz-Informationen */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" />
-              Einsatz-Informationen
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="einsatznummer">Einsatznummer</Label>
-                <Input
-                  id="einsatznummer"
-                  value={formular.einsatznummer}
-                  onChange={(e) => handleChange("einsatznummer", e.target.value)}
-                  placeholder="E-2024-001"
-                  className="font-mono"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select value={formular.status} onValueChange={(v) => handleChange("status", v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="offen">Offen</SelectItem>
-                    <SelectItem value="aktiv">Aktiv</SelectItem>
-                    <SelectItem value="abgeschlossen">Abgeschlossen</SelectItem>
-                    <SelectItem value="archiviert">Archiviert</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="datum">Datum</Label>
-                <Input
-                  id="datum"
-                  type="date"
-                  value={formular.datum}
-                  onChange={(e) => handleChange("datum", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="uhrzeit">Uhrzeit</Label>
-                <Input
-                  id="uhrzeit"
-                  type="time"
-                  value={formular.uhrzeit}
-                  onChange={(e) => handleChange("uhrzeit", e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="beamter">Beamter</Label>
-                <Input
-                  id="beamter"
-                  value={formular.beamter}
-                  onChange={(e) => handleChange("beamter", e.target.value)}
-                  placeholder="Max Mustermann"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dienstnummer">Dienstnummer</Label>
-                <Input
-                  id="dienstnummer"
-                  value={formular.dienstnummer}
-                  onChange={(e) => handleChange("dienstnummer", e.target.value)}
-                  placeholder="LSPD-001"
-                  className="font-mono"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Personal Tabellen */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <PersonalTabelle
+          titel="Leitung des LSPD"
+          titelFarbe="bg-orange-600"
+          zeilen={leitung}
+          onUpdate={(id, field, value) => updatePersonal(setLeitung, id, field, value)}
+        />
+        <PersonalTabelle
+          titel="Detectives"
+          titelFarbe="bg-cyan-600"
+          zeilen={detectives}
+          onUpdate={(id, field, value) => updatePersonal(setDetectives, id, field, value)}
+        />
+        <PersonalTabelle
+          titel="Senior Officer"
+          titelFarbe="bg-cyan-600"
+          zeilen={seniorOfficer}
+          onUpdate={(id, field, value) => updatePersonal(setSeniorOfficer, id, field, value)}
+        />
+        <PersonalTabelle
+          titel="Officer"
+          titelFarbe="bg-cyan-600"
+          zeilen={officer}
+          onUpdate={(id, field, value) => updatePersonal(setOfficer, id, field, value)}
+        />
+        <PersonalTabelle
+          titel="Rookies"
+          titelFarbe="bg-cyan-600"
+          zeilen={rookies}
+          onUpdate={(id, field, value) => updatePersonal(setRookies, id, field, value)}
+        />
+      </div>
 
-        {/* Verdächtiger/Beteiligter */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <User className="w-4 h-4 text-primary" />
-              Verdächtiger / Beteiligter
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="verdaechtiger">Name</Label>
-              <Input
-                id="verdaechtiger"
-                value={formular.verdaechtiger}
-                onChange={(e) => handleChange("verdaechtiger", e.target.value)}
-                placeholder="Vor- und Nachname"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="geburtsdatum">Geburtsdatum</Label>
-                <Input
-                  id="geburtsdatum"
-                  type="date"
-                  value={formular.geburtsdatum}
-                  onChange={(e) => handleChange("geburtsdatum", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="telefon">Telefon</Label>
-                <Input
-                  id="telefon"
-                  value={formular.telefon}
-                  onChange={(e) => handleChange("telefon", e.target.value)}
-                  placeholder="555-1234"
-                  className="font-mono"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Streifendienst */}
+      <div className="space-y-4">
+        <div className="text-center py-2">
+          <span className="text-2xl font-bold tracking-widest text-muted-foreground">
+            - - - Streifendienst - - -
+          </span>
+        </div>
 
-        {/* Fahrzeug */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Car className="w-4 h-4 text-primary" />
-              Fahrzeug
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="fahrzeug">Fahrzeug</Label>
-              <Input
-                id="fahrzeug"
-                value={formular.fahrzeug}
-                onChange={(e) => handleChange("fahrzeug", e.target.value)}
-                placeholder="z.B. Bravado Buffalo, schwarz"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="kennzeichen">Kennzeichen</Label>
-              <Input
-                id="kennzeichen"
-                value={formular.kennzeichen}
-                onChange={(e) => handleChange("kennzeichen", e.target.value)}
-                placeholder="LS-AB-123"
-                className="font-mono uppercase"
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <StreifeKarte
+            name="ADAM 1"
+            {...streifen.adam1}
+            onUpdate={(field, value) => updateStreife("adam1", field, value)}
+          />
+          <StreifeKarte
+            name="ADAM 2"
+            {...streifen.adam2}
+            onUpdate={(field, value) => updateStreife("adam2", field, value)}
+          />
+          <StreifeKarte
+            name="ADAM 3"
+            {...streifen.adam3}
+            onUpdate={(field, value) => updateStreife("adam3", field, value)}
+          />
+          <StreifeKarte
+            name="ADAM 4"
+            {...streifen.adam4}
+            onUpdate={(field, value) => updateStreife("adam4", field, value)}
+          />
+          <StreifeKarte
+            name="ADAM 5"
+            {...streifen.adam5}
+            onUpdate={(field, value) => updateStreife("adam5", field, value)}
+          />
+        </div>
 
-        {/* Tatort */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-primary" />
-              Tatort & Tatzeit
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="tatort">Tatort</Label>
-              <Input
-                id="tatort"
-                value={formular.tatort}
-                onChange={(e) => handleChange("tatort", e.target.value)}
-                placeholder="z.B. Vinewood Boulevard / Alta Street"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tatzeit">Tatzeit</Label>
-              <Input
-                id="tatzeit"
-                value={formular.tatzeit}
-                onChange={(e) => handleChange("tatzeit", e.target.value)}
-                placeholder="z.B. ca. 14:30 Uhr"
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <StreifeKarte
+            name="LINCOLN 1"
+            {...streifen.lincoln1}
+            onUpdate={(field, value) => updateStreife("lincoln1", field, value)}
+          />
+          <StreifeKarte
+            name="LINCOLN 2"
+            {...streifen.lincoln2}
+            onUpdate={(field, value) => updateStreife("lincoln2", field, value)}
+          />
+          <StreifeKarte
+            name="PHÖNIX (Overwatch)"
+            {...streifen.phoenix}
+            onUpdate={(field, value) => updateStreife("phoenix", field, value)}
+          />
+          <StreifeKarte
+            name="HENRY 1"
+            {...streifen.henry1}
+            onUpdate={(field, value) => updateStreife("henry1", field, value)}
+          />
+          <StreifeKarte
+            name="ADAM 1000 - SUPERVISOR"
+            {...streifen.adam1000}
+            onUpdate={(field, value) => updateStreife("adam1000", field, value)}
+            isSupervisor
+          />
+        </div>
 
-        {/* Sachverhalt */}
-        <Card className="bg-card border-border lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" />
-              Sachverhalt & Maßnahmen
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="sachverhalt">Sachverhalt</Label>
-              <Textarea
-                id="sachverhalt"
-                value={formular.sachverhalt}
-                onChange={(e) => handleChange("sachverhalt", e.target.value)}
-                placeholder="Beschreibung des Vorfalls..."
-                className="min-h-[120px]"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="massnahmen">Getroffene Maßnahmen</Label>
-              <Textarea
-                id="massnahmen"
-                value={formular.massnahmen}
-                onChange={(e) => handleChange("massnahmen", e.target.value)}
-                placeholder="z.B. Festnahme, Durchsuchung, Verwarnung..."
-                className="min-h-[100px]"
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="text-center text-sm text-muted-foreground">
+          <span>Lincoln (1er besetzt) - Adam (2er besetzt) - Phönix (Overwatch) - David (Swat Unit) - Henry (Detective Unit)</span>
+        </div>
+      </div>
+
+      {/* Codes & Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CodesTabelle titel=">Ten - Codes<" codes={tenCodes.map(c => ({ code: c.code, bedeutung: c.bedeutung }))} />
+        <CodesTabelle titel="> Codes <" codes={codes} />
+        <div className="lg:col-span-2">
+          <DienstStatusInfo />
+        </div>
       </div>
     </div>
   );
