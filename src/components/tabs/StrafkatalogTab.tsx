@@ -1,15 +1,25 @@
 import { useState, useCallback } from "react";
-import { Plus, X, Clipboard, Trash2, Search } from "lucide-react";
+import { Plus, X, Clipboard, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { strafkatalog, Straftat, Kategorie } from "@/data/strafkatalog";
+import { strafkatalog, Straftat, StraftatTyp } from "@/data/strafkatalog";
+
+const getTypColor = (typ: StraftatTyp) => {
+  switch (typ) {
+    case "Verbrechen":
+      return "bg-red-500";
+    case "Ordnungswidrigkeit":
+      return "bg-green-500";
+    case "Verstoß":
+      return "bg-yellow-500";
+    default:
+      return "bg-red-500";
+  }
+};
 
 export function StrafkatalogTab() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>(strafkatalog[0]?.id || "");
   const [ausgewaehlteStraftaten, setAusgewaehlteStraftaten] = useState<Straftat[]>([]);
 
   const addStraftat = useCallback((straftat: Straftat) => {
@@ -35,118 +45,18 @@ export function StrafkatalogTab() {
     const text = `=== STRAFZETTEL ===
 ANZAHL DELIKTE: ${ausgewaehlteStraftaten.length}
 GESAMTSTRAFE: ${gesamtStrafe.toLocaleString("de-DE")} $
-GESAMT-HAFTZEIT: ${gesamtHaftzeit} Min.
+GESAMT-HAFTZEIT: ${gesamtHaftzeit} Monate
 
 DELIKTLISTE:
-${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.geldstrafe.toLocaleString("de-DE")} $ / ${s.haftzeit} Min.`).join("\n")}
+${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldstrafe > 0 ? ` - $${s.geldstrafe.toLocaleString("de-DE")} Geldstrafe` : ""}`).join("\n")}
 `;
     navigator.clipboard.writeText(text);
     toast.success("Zusammenfassung kopiert!");
   };
 
-  const currentCategory = strafkatalog.find((k) => k.id === selectedCategory);
-  
-  const filteredStraftaten = currentCategory?.straftaten.filter((s) =>
-    searchQuery === "" || s.name.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
-
-  const categoryIcons: Record<string, string> = {
-    verkehr: "🚗",
-    gewalt: "👊",
-    eigentum: "🏠",
-    waffen: "🔫",
-    drogen: "💊",
-    staat: "⚖️",
-  };
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Left Panel - Strafkatalog */}
-      <div className="bg-card/50 border border-border rounded-lg p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-bold tracking-wide text-foreground">STRAFKATALOG</h2>
-            <p className="text-xs text-muted-foreground">Delikte auswählen · Beträge & Haftzeit</p>
-          </div>
-          <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 font-semibold">
-            LOCK MODE B2
-          </Badge>
-        </div>
-
-        {/* Search */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder='Delikt suchen ... z. B. "Mord", "Flucht", "Drogen"'
-            className="pl-10 pr-10 bg-secondary/50 border-border"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Categories */}
-        <div className="mb-4">
-          <label className="text-xs text-muted-foreground font-semibold tracking-wide mb-2 block">
-            KATEGORIEN
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {strafkatalog.map((kategorie) => (
-              <button
-                key={kategorie.id}
-                onClick={() => setSelectedCategory(kategorie.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  selectedCategory === kategorie.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary/70 text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}
-              >
-                <span>{categoryIcons[kategorie.id] || "⚖️"}</span>
-                {kategorie.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Delikte List */}
-        <div>
-          <label className="text-xs text-muted-foreground font-semibold tracking-wide mb-2 block">
-            DELIKTE
-          </label>
-          <ScrollArea className="h-[350px] pr-2">
-            <div className="space-y-1">
-              {filteredStraftaten.map((straftat) => (
-                <div
-                  key={straftat.id}
-                  className="flex items-center justify-between p-3 bg-secondary/30 hover:bg-secondary/50 rounded-md transition-colors group"
-                >
-                  <span className="font-medium text-sm text-foreground">{straftat.name}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">
-                      {straftat.geldstrafe.toLocaleString("de-DE")} $ {straftat.haftzeit} Min.
-                    </span>
-                    <button
-                      onClick={() => addStraftat(straftat)}
-                      className="h-7 w-7 rounded-full bg-primary flex items-center justify-center hover:bg-primary/80 transition-colors"
-                    >
-                      <Plus className="h-4 w-4 text-primary-foreground" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      </div>
-
-      {/* Right Panel - Zusammenfassung */}
+    <div className="space-y-6">
+      {/* Zusammenfassung oben */}
       <div className="bg-card/50 border border-border rounded-lg p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -176,22 +86,15 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.geldstrafe.toLocaleString(
             <div className="text-xs text-muted-foreground font-semibold tracking-wide mb-1">
               GESAMT-HAFTZEIT
             </div>
-            <div className="text-2xl font-bold text-primary">{gesamtHaftzeit} Min.</div>
+            <div className="text-2xl font-bold text-primary">{gesamtHaftzeit} Monate</div>
           </div>
         </div>
 
         {/* Deliktliste */}
-        <div className="mb-4">
-          <label className="text-xs text-muted-foreground font-semibold tracking-wide mb-2 block">
-            DELIKTLISTE
-          </label>
-          <div className="bg-secondary/30 rounded-md p-3 min-h-[200px]">
-            {ausgewaehlteStraftaten.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Noch keine Delikte hinzugefügt. Wähle links eine Kategorie und füge Straftaten hinzu.
-              </p>
-            ) : (
-              <ScrollArea className="h-[180px]">
+        {ausgewaehlteStraftaten.length > 0 && (
+          <div className="mb-4">
+            <div className="bg-secondary/30 rounded-md p-3">
+              <ScrollArea className="max-h-[150px]">
                 <div className="space-y-1">
                   {ausgewaehlteStraftaten.map((straftat) => (
                     <div
@@ -201,7 +104,7 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.geldstrafe.toLocaleString(
                       <span className="text-sm text-foreground">{straftat.name}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">
-                          {straftat.geldstrafe.toLocaleString("de-DE")} $ / {straftat.haftzeit} Min.
+                          {straftat.haftzeit} Monate{straftat.geldstrafe > 0 ? ` - $${straftat.geldstrafe.toLocaleString("de-DE")}` : ""}
                         </span>
                         <button
                           onClick={() => removeStraftat(straftat.id)}
@@ -214,9 +117,9 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.geldstrafe.toLocaleString(
                   ))}
                 </div>
               </ScrollArea>
-            )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Actions */}
         <div className="flex justify-center gap-3">
@@ -230,6 +133,35 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.geldstrafe.toLocaleString(
           </Button>
         </div>
       </div>
+
+      {/* Kategorien mit Straftaten */}
+      {strafkatalog.map((kategorie) => (
+        <div key={kategorie.id} className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-foreground">{kategorie.name}</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {kategorie.straftaten.map((straftat) => (
+              <div
+                key={straftat.id}
+                onClick={() => addStraftat(straftat)}
+                className={`${getTypColor(straftat.typ)} rounded-md p-3 cursor-pointer hover:opacity-90 transition-opacity`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <span className="font-medium text-sm text-white leading-tight pr-2">{straftat.name}</span>
+                  <span className="text-xs text-white/90 whitespace-nowrap">{straftat.typ}</span>
+                </div>
+                <div className="text-xs text-white/80">
+                  {straftat.haftzeit > 0 && <span>{straftat.haftzeit} Monate</span>}
+                  {straftat.haftzeit > 0 && straftat.geldstrafe > 0 && <span> - </span>}
+                  {straftat.geldstrafe > 0 && <span>${straftat.geldstrafe.toLocaleString("de-DE")} Geldstrafe</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

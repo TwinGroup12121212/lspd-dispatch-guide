@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Clipboard, FileText, Scale, Users, LogOut, Plus } from "lucide-react";
+import { Clipboard, FileText, Scale, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -88,33 +88,21 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
             </h1>
             <p className="text-sm text-muted-foreground">Leitstelle · Strafkatalog · Personal</p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-2 text-sm">
-                <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                <span className="text-success font-semibold tracking-wide">DISPATCH ONLINE</span>
-              </span>
-              <Select value={dispatchStatus} onValueChange={setDispatchStatus}>
-                <SelectTrigger className="w-28 h-8 text-xs bg-secondary border-border">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="busy">Busy</SelectItem>
-                  <SelectItem value="emergency">Emergency</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-3 text-sm">
-              <span className="text-muted-foreground">
-                Eingeloggt als <span className="text-primary font-semibold">Police_Admin</span>
-                <span className="text-primary"> (Admin)</span>
-              </span>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                <LogOut className="h-3.5 w-3.5" />
-                Logout
-              </Button>
-            </div>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-2 text-sm">
+              <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+              <span className="text-success font-semibold tracking-wide">DISPATCH ONLINE</span>
+            </span>
+            <Select value={dispatchStatus} onValueChange={setDispatchStatus}>
+              <SelectTrigger className="w-28 h-8 text-xs bg-secondary border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="busy">Busy</SelectItem>
+                <SelectItem value="emergency">Emergency</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </header>
