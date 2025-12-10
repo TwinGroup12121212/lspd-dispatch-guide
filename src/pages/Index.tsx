@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Clipboard, FileText, Scale, Users, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Clipboard, FileText, Scale, Users, LogOut, LogIn, Plus, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { StrafkatalogTab } from "@/components/tabs/StrafkatalogTab";
 import { PersonalabteilungTab } from "@/components/tabs/PersonalabteilungTab";
+import { useAuth } from "@/hooks/useAuth";
 
 type TabType = "leitstellenblatt" | "strafkatalog" | "personalabteilung";
 
@@ -19,6 +21,8 @@ interface Einheit {
 }
 
 export default function Index() {
+  const { user, isAdmin, isLoading, signOut } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>("leitstellenblatt");
   const [dispatchStatus, setDispatchStatus] = useState("normal");
   
@@ -71,11 +75,24 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
     toast.success("Leitstellenblatt kopiert!");
   };
 
+  const handleLogout = async () => {
+    await signOut();
+    toast.success("Erfolgreich abgemeldet");
+  };
+
   const tabs = [
     { id: "leitstellenblatt" as TabType, label: "LEITSTELLENBLATT", icon: FileText },
     { id: "strafkatalog" as TabType, label: "STRAFKATALOG", icon: Scale },
     { id: "personalabteilung" as TabType, label: "PERSONALABTEILUNG", icon: Users, emoji: "👮🔧" },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Lade...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -88,21 +105,42 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
             </h1>
             <p className="text-sm text-muted-foreground">Leitstelle · Strafkatalog · Personal</p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-2 text-sm">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-              <span className="text-success font-semibold tracking-wide">DISPATCH ONLINE</span>
-            </span>
-            <Select value={dispatchStatus} onValueChange={setDispatchStatus}>
-              <SelectTrigger className="w-28 h-8 text-xs bg-secondary border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="busy">Busy</SelectItem>
-                <SelectItem value="emergency">Emergency</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-2 text-sm">
+                <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                <span className="text-success font-semibold tracking-wide">DISPATCH ONLINE</span>
+              </span>
+              <Select value={dispatchStatus} onValueChange={setDispatchStatus}>
+                <SelectTrigger className="w-28 h-8 text-xs bg-secondary border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="busy">Busy</SelectItem>
+                  <SelectItem value="emergency">Emergency</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {user ? (
+              <div className="flex items-center gap-3 text-sm">
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  {isAdmin && <Shield className="h-4 w-4 text-primary" />}
+                  <span className="text-primary font-semibold">{user.email}</span>
+                  {isAdmin && <Badge variant="outline" className="text-xs">Admin</Badge>}
+                </span>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleLogout}>
+                  <LogOut className="h-3.5 w-3.5" />
+                  Logout
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => navigate("/auth")}>
+                <LogIn className="h-3.5 w-3.5" />
+                Anmelden
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -264,7 +302,7 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
       {/* Footer */}
       <footer className="border-t border-border py-3 px-6 text-center">
         <p className="text-xs text-muted-foreground">
-          LSPD Tactical PD-System · Standalone (reines Frontend, LocalStorage). Für echte Mehrbenutzer-Locks wäre ein Server nötig.
+          LSPD Tactical PD-System · Powered by Lovable Cloud
         </p>
       </footer>
     </div>
