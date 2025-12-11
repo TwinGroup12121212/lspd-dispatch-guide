@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clipboard, FileText, Scale, Users, LogOut, LogIn, Plus, Shield } from "lucide-react";
+import { Clipboard, FileText, Scale, Users, LogOut, Plus, Shield, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,9 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { StrafkatalogTab } from "@/components/tabs/StrafkatalogTab";
 import { PersonalabteilungTab } from "@/components/tabs/PersonalabteilungTab";
+import { UserManagement } from "@/components/UserManagement";
 import { useAuth } from "@/hooks/useAuth";
 
-type TabType = "leitstellenblatt" | "strafkatalog" | "personalabteilung";
+type TabType = "leitstellenblatt" | "strafkatalog" | "personalabteilung" | "verwaltung";
 
 interface Einheit {
   id: string;
@@ -84,7 +85,15 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
     { id: "leitstellenblatt" as TabType, label: "LEITSTELLENBLATT", icon: FileText },
     { id: "strafkatalog" as TabType, label: "STRAFKATALOG", icon: Scale },
     { id: "personalabteilung" as TabType, label: "PERSONALABTEILUNG", icon: Users, emoji: "👮🔧" },
+    ...(isAdmin ? [{ id: "verwaltung" as TabType, label: "VERWALTUNG", icon: Settings }] : []),
   ];
+
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!isLoading && !user) {
+      navigate("/auth");
+    }
+  }, [isLoading, user, navigate]);
 
   if (isLoading) {
     return (
@@ -92,6 +101,10 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
         <div className="text-muted-foreground">Lade...</div>
       </div>
     );
+  }
+
+  if (!user) {
+    return null;
   }
 
   return (
@@ -123,24 +136,17 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
               </Select>
             </div>
             
-            {user ? (
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  {isAdmin && <Shield className="h-4 w-4 text-primary" />}
-                  <span className="text-primary font-semibold">{user.email}</span>
-                  {isAdmin && <Badge variant="outline" className="text-xs">Admin</Badge>}
-                </span>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleLogout}>
-                  <LogOut className="h-3.5 w-3.5" />
-                  Logout
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => navigate("/auth")}>
-                <LogIn className="h-3.5 w-3.5" />
-                Anmelden
+            <div className="flex items-center gap-3 text-sm">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                {isAdmin && <Shield className="h-4 w-4 text-primary" />}
+                <span className="text-primary font-semibold">{user.email}</span>
+                {isAdmin && <Badge variant="outline" className="text-xs">Admin</Badge>}
+              </span>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleLogout}>
+                <LogOut className="h-3.5 w-3.5" />
+                Logout
               </Button>
-            )}
+            </div>
           </div>
         </div>
       </header>
@@ -297,6 +303,7 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
 
         {activeTab === "strafkatalog" && <StrafkatalogTab />}
         {activeTab === "personalabteilung" && <PersonalabteilungTab />}
+        {activeTab === "verwaltung" && isAdmin && <UserManagement />}
       </main>
 
       {/* Footer */}
