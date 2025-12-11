@@ -22,7 +22,7 @@ interface Einheit {
 }
 
 export default function Index() {
-  const { user, isAdmin, isLoading, signOut } = useAuth();
+  const { user, isAdmin, isLoading, displayName, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>("leitstellenblatt");
   const [dispatchStatus, setDispatchStatus] = useState("normal");
@@ -139,7 +139,7 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
             <div className="flex items-center gap-3 text-sm">
               <span className="text-muted-foreground flex items-center gap-1.5">
                 {isAdmin && <Shield className="h-4 w-4 text-primary" />}
-                <span className="text-primary font-semibold">{user.email}</span>
+                <span className="text-primary font-semibold">{displayName || user.email}</span>
                 {isAdmin && <Badge variant="outline" className="text-xs">Admin</Badge>}
               </span>
               <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleLogout}>
