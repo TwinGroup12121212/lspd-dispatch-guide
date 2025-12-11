@@ -5,10 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { Shield, UserPlus, LogIn } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Shield, UserPlus, LogIn, KeyRound, ArrowLeft } from "lucide-react";
+
+type AuthMode = "login" | "register" | "reset";
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -25,19 +28,24 @@ export default function Auth() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password) {
-      toast.error("Bitte E-Mail und Passwort eingeben");
+    if (!email) {
+      toast.error("Bitte E-Mail eingeben");
       return;
     }
 
-    if (password.length < 6) {
+    if (mode !== "reset" && !password) {
+      toast.error("Bitte Passwort eingeben");
+      return;
+    }
+
+    if (mode !== "reset" && password.length < 6) {
       toast.error("Passwort muss mindestens 6 Zeichen lang sein");
       return;
     }
 
     setIsSubmitting(true);
 
-    if (isLogin) {
+    if (mode === "login") {
       const { error } = await signIn(email, password);
       if (error) {
         if (error.message.includes("Invalid login credentials")) {
@@ -49,7 +57,7 @@ export default function Auth() {
         toast.success("Erfolgreich angemeldet!");
         navigate("/");
       }
-    } else {
+    } else if (mode === "register") {
       const { error } = await signUp(email, password, displayName);
       if (error) {
         if (error.message.includes("User already registered")) {
@@ -61,9 +69,27 @@ export default function Auth() {
         toast.success("Account erstellt! Du bist jetzt eingeloggt.");
         navigate("/");
       }
+    } else if (mode === "reset") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("E-Mail zum Zurücksetzen wurde gesendet!");
+        setMode("login");
+      }
     }
 
     setIsSubmitting(false);
+  };
+
+  const getTitle = () => {
+    switch (mode) {
+      case "login": return "Melde dich an, um fortzufahren";
+      case "register": return "Erstelle einen neuen Account";
+      case "reset": return "Passwort zurücksetzen";
+    }
   };
 
   return (
@@ -81,13 +107,13 @@ export default function Auth() {
               LSPD SYSTEM
             </h1>
             <p className="text-sm text-muted-foreground mt-2">
-              {isLogin ? "Melde dich an, um fortzufahren" : "Erstelle einen neuen Account"}
+              {getTitle()}
             </p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+            {mode === "register" && (
               <div className="space-y-2">
                 <Label htmlFor="displayName">Anzeigename</Label>
                 <Input
@@ -114,46 +140,82 @@ export default function Auth() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Passwort</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="bg-secondary/50 border-border"
-                required
-              />
-            </div>
+            {mode !== "reset" && (
+              <div className="space-y-2">
+                <Label htmlFor="password">Passwort</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="bg-secondary/50 border-border"
+                  required
+                />
+              </div>
+            )}
 
             <Button
               type="submit"
               className="w-full gap-2"
               disabled={isSubmitting}
             >
-              {isLogin ? (
+              {mode === "login" && (
                 <>
                   <LogIn className="h-4 w-4" />
                   Anmelden
                 </>
-              ) : (
+              )}
+              {mode === "register" && (
                 <>
                   <UserPlus className="h-4 w-4" />
                   Registrieren
                 </>
               )}
+              {mode === "reset" && (
+                <>
+                  <KeyRound className="h-4 w-4" />
+                  Link senden
+                </>
+              )}
             </Button>
           </form>
 
-          {/* Toggle */}
-          <div className="mt-6 text-center">
+          {/* Password Reset Link */}
+          {mode === "login" && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={() => setMode("reset")}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                Passwort vergessen?
+              </button>
+            </div>
+          )}
+
+          {/* Back to Login from Reset */}
+          {mode === "reset" && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={() => setMode("login")}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1 mx-auto"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                Zurück zur Anmeldung
+              </button>
+            </div>
+          )}
+
+          {/* Toggle Login/Register */}
+          <div className="mt-6 text-center border-t border-border pt-4">
             <button
               type="button"
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => setMode(mode === "login" ? "register" : "login")}
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
             >
-              {isLogin
+              {mode === "login" || mode === "reset"
                 ? "Noch kein Account? Registrieren"
                 : "Bereits ein Account? Anmelden"}
             </button>

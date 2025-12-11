@@ -7,6 +7,7 @@ interface AuthContextType {
   session: Session | null;
   isAdmin: boolean;
   isLoading: boolean;
+  displayName: string | null;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -19,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   const checkAdminRole = async (userId: string) => {
     const { data, error } = await supabase.rpc('has_role', {
@@ -32,6 +34,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const fetchDisplayName = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', userId)
+      .maybeSingle();
+    
+    if (!error && data?.display_name) {
+      setDisplayName(data.display_name);
+    } else {
+      setDisplayName(null);
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -39,13 +55,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Defer admin check with setTimeout
+        // Defer admin check and profile fetch with setTimeout
         if (session?.user) {
           setTimeout(() => {
             checkAdminRole(session.user.id);
+            fetchDisplayName(session.user.id);
           }, 0);
         } else {
           setIsAdmin(false);
+          setDisplayName(null);
         }
         setIsLoading(false);
       }
@@ -57,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         checkAdminRole(session.user.id);
+        fetchDisplayName(session.user.id);
       }
       setIsLoading(false);
     });
@@ -90,10 +109,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     setIsAdmin(false);
+    setDisplayName(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, isAdmin, isLoading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, isAdmin, isLoading, displayName, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
