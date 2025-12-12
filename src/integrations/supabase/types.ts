@@ -35,6 +35,48 @@ export type Database = {
         }
         Relationships: []
       }
+      mitarbeiter: {
+        Row: {
+          abteilung: string
+          created_at: string
+          dienstnummer: string
+          geraete: string | null
+          id: string
+          name: string
+          notizen: string | null
+          qualifikationen: string | null
+          rang: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          abteilung: string
+          created_at?: string
+          dienstnummer: string
+          geraete?: string | null
+          id?: string
+          name: string
+          notizen?: string | null
+          qualifikationen?: string | null
+          rang: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          abteilung?: string
+          created_at?: string
+          dienstnummer?: string
+          geraete?: string | null
+          id?: string
+          name?: string
+          notizen?: string | null
+          qualifikationen?: string | null
+          rang?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -56,6 +98,30 @@ export type Database = {
           email?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      strafkatalog_lock: {
+        Row: {
+          expires_at: string
+          id: string
+          locked_at: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          expires_at?: string
+          id?: string
+          locked_at?: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          expires_at?: string
+          id?: string
+          locked_at?: string
+          user_id?: string
+          user_name?: string
         }
         Relationships: []
       }

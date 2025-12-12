@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, X, Pencil, Trash2, Save, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Mitarbeiter {
   id: string;
@@ -14,9 +16,9 @@ interface Mitarbeiter {
   rang: string;
   abteilung: string;
   status: string;
-  geraete: string;
-  qualifikationen: string;
-  notizen: string;
+  geraete: string | null;
+  qualifikationen: string | null;
+  notizen: string | null;
 }
 
 const rangOptionen = [
@@ -46,13 +48,10 @@ const abteilungOptionen = [
 const statusOptionen = ["Aktiv", "Inaktiv", "Suspendiert", "Urlaub"];
 
 export function PersonalabteilungTab() {
+  const { isAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([
-    { id: "1", name: "Carlo Salentino", dienstnummer: "01", rang: "Chief of Police", abteilung: "Command Staff", status: "Aktiv", geraete: "", qualifikationen: "", notizen: "" },
-    { id: "2", name: "Coralee Rose", dienstnummer: "02", rang: "Chief of Police", abteilung: "Command Staff", status: "Aktiv", geraete: "", qualifikationen: "", notizen: "" },
-    { id: "3", name: "John Montes", dienstnummer: "29", rang: "Assistant Chief", abteilung: "Command Staff", status: "Aktiv", geraete: "", qualifikationen: "", notizen: "" },
-    { id: "4", name: "Lio Peter", dienstnummer: "03", rang: "Captain", abteilung: "Internal Affairs", status: "Aktiv", geraete: "", qualifikationen: "", notizen: "" },
-  ]);
+  const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Mitarbeiter>>({
@@ -65,6 +64,27 @@ export function PersonalabteilungTab() {
     qualifikationen: "",
     notizen: "",
   });
+
+  // Fetch employees from database
+  useEffect(() => {
+    const fetchMitarbeiter = async () => {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from("mitarbeiter")
+        .select("*")
+        .order("rang", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching mitarbeiter:", error);
+        toast.error("Fehler beim Laden der Mitarbeiter");
+      } else {
+        setMitarbeiter(data || []);
+      }
+      setIsLoading(false);
+    };
+
+    fetchMitarbeiter();
+  }, []);
 
   const clearForm = () => {
     setFormData({
@@ -80,20 +100,68 @@ export function PersonalabteilungTab() {
     setEditingId(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name || !formData.dienstnummer) {
       toast.error("Name und Dienstnummer sind erforderlich!");
       return;
     }
 
+    if (!formData.rang || !formData.abteilung) {
+      toast.error("Rang und Abteilung sind erforderlich!");
+      return;
+    }
+
     if (editingId) {
+      // Update existing
+      const { error } = await supabase
+        .from("mitarbeiter")
+        .update({
+          name: formData.name,
+          dienstnummer: formData.dienstnummer,
+          rang: formData.rang,
+          abteilung: formData.abteilung,
+          status: formData.status || "Aktiv",
+          geraete: formData.geraete || null,
+          qualifikationen: formData.qualifikationen || null,
+          notizen: formData.notizen || null,
+        })
+        .eq("id", editingId);
+
+      if (error) {
+        toast.error("Fehler beim Aktualisieren: " + error.message);
+        return;
+      }
+
       setMitarbeiter(mitarbeiter.map(m => 
         m.id === editingId ? { ...m, ...formData } as Mitarbeiter : m
       ));
       toast.success("Mitarbeiter aktualisiert!");
     } else {
-      setMitarbeiter([...mitarbeiter, { ...formData, id: Date.now().toString() } as Mitarbeiter]);
-      toast.success("Mitarbeiter hinzugefügt!");
+      // Create new
+      const { data, error } = await supabase
+        .from("mitarbeiter")
+        .insert({
+          name: formData.name,
+          dienstnummer: formData.dienstnummer,
+          rang: formData.rang,
+          abteilung: formData.abteilung,
+          status: formData.status || "Aktiv",
+          geraete: formData.geraete || null,
+          qualifikationen: formData.qualifikationen || null,
+          notizen: formData.notizen || null,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        toast.error("Fehler beim Hinzufügen: " + error.message);
+        return;
+      }
+
+      if (data) {
+        setMitarbeiter([...mitarbeiter, data]);
+        toast.success("Mitarbeiter hinzugefügt!");
+      }
     }
     clearForm();
   };
@@ -103,7 +171,17 @@ export function PersonalabteilungTab() {
     setFormData(m);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase
+      .from("mitarbeiter")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Fehler beim Löschen: " + error.message);
+      return;
+    }
+
     setMitarbeiter(mitarbeiter.filter(m => m.id !== id));
     toast.success("Mitarbeiter gelöscht!");
   };
@@ -115,6 +193,14 @@ export function PersonalabteilungTab() {
     m.rang.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.abteilung.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Lade Mitarbeiter...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -297,34 +383,46 @@ export function PersonalabteilungTab() {
         {/* Table */}
         <ScrollArea className="h-[350px]">
           <div className="space-y-1">
-            {filteredMitarbeiter.map((m) => (
-              <div
-                key={m.id}
-                className="grid grid-cols-[1fr_0.7fr_1fr_1fr_0.7fr_0.7fr] gap-2 items-center p-2 bg-secondary/30 hover:bg-secondary/50 rounded-md transition-colors"
-              >
-                <span className="text-sm text-foreground truncate">{m.name}</span>
-                <span className="text-sm text-muted-foreground">{m.dienstnummer}</span>
-                <span className="text-sm text-muted-foreground truncate">{m.rang}</span>
-                <span className="text-sm text-muted-foreground truncate">{m.abteilung}</span>
-                <span className="text-sm text-foreground">{m.status}</span>
-                <div className="flex justify-end gap-1">
-                  <button
-                    onClick={() => handleEdit(m)}
-                    className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center hover:bg-primary/30 transition-colors"
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-primary" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(m.id)}
-                    className="h-7 w-7 rounded-full bg-destructive/20 flex items-center justify-center hover:bg-destructive/30 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </button>
-                </div>
+            {filteredMitarbeiter.length === 0 ? (
+              <div className="flex items-center justify-center h-32">
+                <span className="text-muted-foreground">Keine Mitarbeiter gefunden</span>
               </div>
-            ))}
+            ) : (
+              filteredMitarbeiter.map((m) => (
+                <div
+                  key={m.id}
+                  className="grid grid-cols-[1fr_0.7fr_1fr_1fr_0.7fr_0.7fr] gap-2 items-center p-2 bg-secondary/30 hover:bg-secondary/50 rounded-md transition-colors"
+                >
+                  <span className="text-sm text-foreground truncate">{m.name}</span>
+                  <span className="text-sm text-muted-foreground">{m.dienstnummer}</span>
+                  <span className="text-sm text-muted-foreground truncate">{m.rang}</span>
+                  <span className="text-sm text-muted-foreground truncate">{m.abteilung}</span>
+                  <span className="text-sm text-foreground">{m.status}</span>
+                  <div className="flex justify-end gap-1">
+                    <button
+                      onClick={() => handleEdit(m)}
+                      className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center hover:bg-primary/30 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-primary" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(m.id)}
+                      className="h-7 w-7 rounded-full bg-destructive/20 flex items-center justify-center hover:bg-destructive/30 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </ScrollArea>
+
+        <div className="mt-4 pt-4 border-t border-border">
+          <p className="text-xs text-muted-foreground">
+            {mitarbeiter.length} Mitarbeiter registriert
+          </p>
+        </div>
       </div>
     </div>
   );
