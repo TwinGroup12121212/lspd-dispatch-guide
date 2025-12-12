@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Search, X, Trash2, Shield, User } from "lucide-react";
+import { Search, X, Trash2, Shield, User, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,6 +26,9 @@ export function UserManagement() {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newUser, setNewUser] = useState({ username: "", password: "", confirmPassword: "" });
+  const [isCreating, setIsCreating] = useState(false);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -70,6 +74,55 @@ export function UserManagement() {
     }
   }, [isAdmin]);
 
+  const handleCreateUser = async () => {
+    if (!newUser.username.trim()) {
+      toast.error("Bitte Benutzername eingeben");
+      return;
+    }
+    if (newUser.password.length < 6) {
+      toast.error("Passwort muss mindestens 6 Zeichen haben");
+      return;
+    }
+    if (newUser.password !== newUser.confirmPassword) {
+      toast.error("Passwörter stimmen nicht überein");
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      // Create user with email format based on username
+      const email = `${newUser.username.toLowerCase().replace(/\s+/g, '.')}@lspd.local`;
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: newUser.password,
+        options: {
+          data: {
+            display_name: newUser.username,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(`Benutzer "${newUser.username}" wurde erstellt`);
+      setNewUser({ username: "", password: "", confirmPassword: "" });
+      setShowCreateDialog(false);
+      
+      // Refresh user list
+      setTimeout(() => fetchUsers(), 1000);
+    } catch (error: any) {
+      console.error("Error creating user:", error);
+      if (error.message?.includes("already registered")) {
+        toast.error("Benutzername bereits vergeben");
+      } else {
+        toast.error("Fehler beim Erstellen des Benutzers: " + error.message);
+      }
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const updateUserRole = async (userId: string, newRole: AppRole) => {
     try {
       // Check if user already has a role entry
@@ -105,8 +158,7 @@ export function UserManagement() {
   };
 
   const deleteUser = async (userId: string) => {
-    // Note: This only removes the role, not the actual user from auth
-    // Full user deletion requires admin API access
+    // This removes the user's role and profile, effectively disabling their access
     try {
       await supabase
         .from("user_roles")
@@ -119,7 +171,7 @@ export function UserManagement() {
         .eq("id", userId);
 
       setUsers(users.filter((u) => u.id !== userId));
-      toast.success("Benutzer entfernt");
+      toast.success("Zugang entfernt - Benutzer kann sich nicht mehr anmelden");
     } catch (error) {
       console.error("Error deleting user:", error);
       toast.error("Fehler beim Löschen des Benutzers");
@@ -128,7 +180,6 @@ export function UserManagement() {
 
   const filteredUsers = users.filter((u) =>
     searchQuery === "" ||
-    u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -149,9 +200,62 @@ export function UserManagement() {
           <h2 className="text-lg font-bold tracking-wide text-foreground">BENUTZERVERWALTUNG</h2>
           <p className="text-xs text-muted-foreground">Zugänge und Berechtigungen verwalten</p>
         </div>
-        <Badge className="bg-primary/20 text-primary border-primary/30 font-semibold">
-          ADMIN
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <UserPlus className="h-4 w-4" />
+                Neuen Zugang erstellen
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border">
+              <DialogHeader>
+                <DialogTitle>Neuen Zugang erstellen</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <label className="text-sm font-medium">Benutzername</label>
+                  <Input
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    placeholder="z.B. Max Mustermann"
+                    className="bg-secondary/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Passwort</label>
+                  <Input
+                    type="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    placeholder="Mindestens 6 Zeichen"
+                    className="bg-secondary/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Passwort bestätigen</label>
+                  <Input
+                    type="password"
+                    value={newUser.confirmPassword}
+                    onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
+                    placeholder="Passwort wiederholen"
+                    className="bg-secondary/50"
+                  />
+                </div>
+                <Button 
+                  onClick={handleCreateUser} 
+                  className="w-full"
+                  disabled={isCreating}
+                >
+                  {isCreating ? "Wird erstellt..." : "Zugang erstellen"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Badge className="bg-primary/20 text-primary border-primary/30 font-semibold">
+            ADMIN
+          </Badge>
+        </div>
       </div>
 
       {/* Search */}
@@ -160,7 +264,7 @@ export function UserManagement() {
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Suche nach E-Mail oder Name ..."
+          placeholder="Suche nach Name ..."
           className="pl-10 pr-10 bg-secondary/50 border-border"
         />
         {searchQuery && (
@@ -175,7 +279,7 @@ export function UserManagement() {
 
       {/* Table Header */}
       <div className="grid grid-cols-[1.5fr_1fr_1fr_0.5fr] gap-2 px-2 mb-2">
-        <span className="text-xs text-muted-foreground font-semibold">E-Mail / Name</span>
+        <span className="text-xs text-muted-foreground font-semibold">Benutzername</span>
         <span className="text-xs text-muted-foreground font-semibold">Registriert</span>
         <span className="text-xs text-muted-foreground font-semibold">Rolle</span>
         <span className="text-xs text-muted-foreground font-semibold text-right">Aktion</span>
@@ -204,12 +308,9 @@ export function UserManagement() {
                   ) : (
                     <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   )}
-                  <div className="min-w-0">
-                    <p className="text-sm text-foreground truncate">{user.email}</p>
-                    {user.display_name && user.display_name !== user.email && (
-                      <p className="text-xs text-muted-foreground truncate">{user.display_name}</p>
-                    )}
-                  </div>
+                  <span className="text-sm text-foreground truncate">
+                    {user.display_name || "Unbekannt"}
+                  </span>
                 </div>
                 <span className="text-sm text-muted-foreground">
                   {new Date(user.created_at).toLocaleDateString("de-DE")}
@@ -230,7 +331,7 @@ export function UserManagement() {
                   <button
                     onClick={() => deleteUser(user.id)}
                     className="h-7 w-7 rounded-full bg-destructive/20 flex items-center justify-center hover:bg-destructive/30 transition-colors"
-                    title="Benutzer löschen"
+                    title="Zugang löschen"
                   >
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </button>
