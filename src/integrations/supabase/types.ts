@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      einheiten: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          typ: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+          typ?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          typ?: string
+        }
+        Relationships: []
+      }
       kategorien: {
         Row: {
           created_at: string
@@ -34,6 +58,104 @@ export type Database = {
           sort_order?: number
         }
         Relationships: []
+      }
+      leitstellenblatt: {
+        Row: {
+          hinweise: string | null
+          id: string
+          leitstelle_id: string | null
+          supervisor_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          hinweise?: string | null
+          id?: string
+          leitstelle_id?: string | null
+          supervisor_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          hinweise?: string | null
+          id?: string
+          leitstelle_id?: string | null
+          supervisor_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leitstellenblatt_leitstelle_id_fkey"
+            columns: ["leitstelle_id"]
+            isOneToOne: false
+            referencedRelation: "mitarbeiter"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leitstellenblatt_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "mitarbeiter"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leitstellenblatt_einheiten: {
+        Row: {
+          einheit_id: string | null
+          funker_id: string | null
+          id: string
+          leitstellenblatt_id: string | null
+          mitarbeiter_id: string | null
+          sort_order: number
+        }
+        Insert: {
+          einheit_id?: string | null
+          funker_id?: string | null
+          id?: string
+          leitstellenblatt_id?: string | null
+          mitarbeiter_id?: string | null
+          sort_order?: number
+        }
+        Update: {
+          einheit_id?: string | null
+          funker_id?: string | null
+          id?: string
+          leitstellenblatt_id?: string | null
+          mitarbeiter_id?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leitstellenblatt_einheiten_einheit_id_fkey"
+            columns: ["einheit_id"]
+            isOneToOne: false
+            referencedRelation: "einheiten"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leitstellenblatt_einheiten_funker_id_fkey"
+            columns: ["funker_id"]
+            isOneToOne: false
+            referencedRelation: "mitarbeiter"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leitstellenblatt_einheiten_leitstellenblatt_id_fkey"
+            columns: ["leitstellenblatt_id"]
+            isOneToOne: false
+            referencedRelation: "leitstellenblatt"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leitstellenblatt_einheiten_mitarbeiter_id_fkey"
+            columns: ["mitarbeiter_id"]
+            isOneToOne: false
+            referencedRelation: "mitarbeiter"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mitarbeiter: {
         Row: {
@@ -83,6 +205,7 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
+          must_change_password: boolean
           updated_at: string
         }
         Insert: {
@@ -90,6 +213,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id: string
+          must_change_password?: boolean
           updated_at?: string
         }
         Update: {
@@ -97,6 +221,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          must_change_password?: boolean
           updated_at?: string
         }
         Relationships: []

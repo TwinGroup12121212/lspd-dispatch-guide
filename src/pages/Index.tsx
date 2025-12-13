@@ -1,80 +1,23 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clipboard, FileText, Scale, Users, LogOut, Plus, Shield, Settings } from "lucide-react";
+import { FileText, Scale, Users, LogOut, Shield, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { StrafkatalogTab } from "@/components/tabs/StrafkatalogTab";
 import { PersonalabteilungTab } from "@/components/tabs/PersonalabteilungTab";
+import { LeitstellenblattTab } from "@/components/tabs/LeitstellenblattTab";
 import { UserManagement } from "@/components/UserManagement";
 import { useAuth } from "@/hooks/useAuth";
 
 type TabType = "leitstellenblatt" | "strafkatalog" | "personalabteilung" | "verwaltung";
-
-interface Einheit {
-  id: string;
-  rufname: string;
-  dnName: string;
-  funker: string;
-}
 
 export default function Index() {
   const { user, isAdmin, isLoading, displayName, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>("leitstellenblatt");
   const [dispatchStatus, setDispatchStatus] = useState("normal");
-  
-  // Leitstellenblatt state
-  const [supervisor, setSupervisor] = useState("");
-  const [leitstelle, setLeitstelle] = useState("");
-  const [hinweise, setHinweise] = useState("");
-  const [einheiten, setEinheiten] = useState<Einheit[]>([
-    { id: "1", rufname: "", dnName: "", funker: "" },
-    { id: "2", rufname: "", dnName: "", funker: "" },
-    { id: "3", rufname: "", dnName: "", funker: "" },
-    { id: "4", rufname: "", dnName: "", funker: "" },
-    { id: "5", rufname: "", dnName: "", funker: "" },
-    { id: "6", rufname: "", dnName: "", funker: "" },
-  ]);
-
-  const addEinheit = () => {
-    setEinheiten([...einheiten, { id: Date.now().toString(), rufname: "", dnName: "", funker: "" }]);
-  };
-
-  const clearEinheiten = () => {
-    setEinheiten(einheiten.map(e => ({ ...e, rufname: "", dnName: "", funker: "" })));
-  };
-
-  const updateEinheit = (id: string, field: keyof Einheit, value: string) => {
-    setEinheiten(einheiten.map(e => e.id === id ? { ...e, [field]: value } : e));
-  };
-
-  const resetForm = () => {
-    setSupervisor("");
-    setLeitstelle("");
-    setHinweise("");
-    clearEinheiten();
-  };
-
-  const copyLeitstellenblatt = () => {
-    const text = `=== LSPD LEITSTELLENBLATT ===
-SUPERVISOR: ${supervisor}
-LEITSTELLE: ${leitstelle}
-
-LAGE / HINWEISE:
-${hinweise}
-
-EINGETEILTE EINHEITEN:
-${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e => 
-  `${e.rufname} | ${e.dnName} | ${e.funker}`
-).join("\n")}
-`;
-    navigator.clipboard.writeText(text);
-    toast.success("Leitstellenblatt kopiert!");
-  };
 
   const handleLogout = async () => {
     await signOut();
@@ -177,129 +120,7 @@ ${einheiten.filter(e => e.rufname || e.dnName || e.funker).map(e =>
 
       {/* Main Content */}
       <main className="p-6">
-        {activeTab === "leitstellenblatt" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Panel - Leitstellenblatt */}
-            <div className="bg-card/50 border border-border rounded-lg p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-bold tracking-wide text-foreground">LEITSTELLENBLATT</h2>
-                  <p className="text-xs text-muted-foreground">Einsatzübersicht · Funkdisposition</p>
-                </div>
-                <Badge className="bg-primary/20 text-primary border-primary/30 font-semibold">
-                  SHIFT ACTIVE
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="text-xs text-muted-foreground font-semibold tracking-wide mb-1.5 block">
-                    SUPERVISOR
-                  </label>
-                  <Input
-                    value={supervisor}
-                    onChange={(e) => setSupervisor(e.target.value)}
-                    placeholder="DN + Name"
-                    className="bg-secondary/50 border-border"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground font-semibold tracking-wide mb-1.5 block">
-                    LEITSTELLE
-                  </label>
-                  <Input
-                    value={leitstelle}
-                    onChange={(e) => setLeitstelle(e.target.value)}
-                    placeholder="DN + Name"
-                    className="bg-secondary/50 border-border"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground font-semibold tracking-wide mb-1.5 block">
-                  LAGE / HINWEISE
-                </label>
-                <Textarea
-                  value={hinweise}
-                  onChange={(e) => setHinweise(e.target.value)}
-                  placeholder="Kurzlage, Fahndungen, Sonderlagen ..."
-                  className="bg-secondary/50 border-border min-h-[120px] resize-y"
-                />
-              </div>
-            </div>
-
-            {/* Right Panel - Eingeteilte Einheiten */}
-            <div className="bg-card/50 border border-border rounded-lg p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-bold tracking-wide text-foreground">EINGETEILTE EINHEITEN</h2>
-                  <p className="text-xs text-muted-foreground">Rufnamen · Funk · Status</p>
-                </div>
-                <Badge variant="outline" className="font-semibold">
-                  UNIT GRID
-                </Badge>
-              </div>
-
-              {/* Table Header */}
-              <div className="grid grid-cols-3 gap-2 mb-2 px-2">
-                <span className="text-xs text-muted-foreground font-semibold tracking-wide">ADAM/LINCOLN</span>
-                <span className="text-xs text-muted-foreground font-semibold tracking-wide">DN + Name</span>
-                <span className="text-xs text-muted-foreground font-semibold tracking-wide">Funker</span>
-              </div>
-
-              {/* Table Rows */}
-              <div className="space-y-1.5 mb-4 max-h-[300px] overflow-y-auto">
-                {einheiten.map((einheit) => (
-                  <div key={einheit.id} className="grid grid-cols-3 gap-2">
-                    <Input
-                      value={einheit.rufname}
-                      onChange={(e) => updateEinheit(einheit.id, "rufname", e.target.value)}
-                      placeholder="Rufname"
-                      className="h-9 text-sm bg-secondary/50 border-border"
-                    />
-                    <Input
-                      value={einheit.dnName}
-                      onChange={(e) => updateEinheit(einheit.id, "dnName", e.target.value)}
-                      placeholder="DN + Name"
-                      className="h-9 text-sm bg-secondary/50 border-border"
-                    />
-                    <Input
-                      value={einheit.funker}
-                      onChange={(e) => updateEinheit(einheit.id, "funker", e.target.value)}
-                      placeholder="DN + Name"
-                      className="h-9 text-sm bg-secondary/50 border-border"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={addEinheit} className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" />
-                  Zeile
-                </Button>
-                <Button variant="outline" size="sm" onClick={clearEinheiten} className="gap-1.5">
-                  <span className="text-base">🧹</span>
-                  Tabelle leeren
-                </Button>
-              </div>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="lg:col-span-2 flex justify-center gap-3">
-              <Button onClick={copyLeitstellenblatt} className="gap-2 px-6">
-                <Clipboard className="h-4 w-4" />
-                Leitstellenblatt kopieren
-              </Button>
-              <Button variant="outline" onClick={resetForm} className="gap-2 px-6">
-                <span className="text-base">↻</span>
-                Formular zurücksetzen
-              </Button>
-            </div>
-          </div>
-        )}
+        {activeTab === "leitstellenblatt" && <LeitstellenblattTab />}
 
         {activeTab === "strafkatalog" && <StrafkatalogTab />}
         {activeTab === "personalabteilung" && <PersonalabteilungTab />}
