@@ -251,6 +251,17 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
 
   return (
     <div className="space-y-6">
+      {/* Gesetzbuch Link - ganz oben */}
+      <a
+        href="https://docs.google.com/document/d/1mtBevLekozRN3tH0yOAZgBw-C8Yp5qNzUkPMWNFL7zw/edit?tab=t.0"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 p-4 bg-primary/10 border border-primary/30 rounded-lg hover:bg-primary/20 transition-colors"
+      >
+        <ExternalLink className="h-5 w-5 text-primary" />
+        <span className="font-semibold text-primary">Gesetzbuch öffnen</span>
+      </a>
+
       {/* Lock Status Banner */}
       {isLocked && !isMyLock && (
         <div className="bg-amber-500/20 border border-amber-500/30 rounded-lg p-4 flex items-center gap-3">

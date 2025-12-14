@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, X, Trash2, Shield, User, UserPlus } from "lucide-react";
+import { Search, X, Trash2, Shield, User, UserPlus, Copy, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,14 +21,27 @@ interface UserWithRole {
   created_at: string;
 }
 
+// Generate random password
+const generatePassword = (): string => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
+  let password = "";
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+};
+
 export function UserManagement() {
   const { isAdmin } = useAuth();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newUser, setNewUser] = useState({ username: "", password: "", confirmPassword: "" });
+  const [newUsername, setNewUsername] = useState("");
+  const [generatedPassword, setGeneratedPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [createdUser, setCreatedUser] = useState<{ username: string; password: string } | null>(null);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -74,40 +87,50 @@ export function UserManagement() {
     }
   }, [isAdmin]);
 
+  const openCreateDialog = () => {
+    const password = generatePassword();
+    setGeneratedPassword(password);
+    setNewUsername("");
+    setCreatedUser(null);
+    setShowPassword(false);
+    setShowCreateDialog(true);
+  };
+
   const handleCreateUser = async () => {
-    if (!newUser.username.trim()) {
+    if (!newUsername.trim()) {
       toast.error("Bitte Benutzername eingeben");
-      return;
-    }
-    if (newUser.password.length < 6) {
-      toast.error("Passwort muss mindestens 6 Zeichen haben");
-      return;
-    }
-    if (newUser.password !== newUser.confirmPassword) {
-      toast.error("Passwörter stimmen nicht überein");
       return;
     }
 
     setIsCreating(true);
     try {
       // Create user with email format based on username
-      const email = `${newUser.username.toLowerCase().replace(/\s+/g, '.')}@lspd.local`;
+      const email = `${newUsername.toLowerCase().replace(/\s+/g, '.')}@lspd.local`;
       
       const { data, error } = await supabase.auth.signUp({
         email,
-        password: newUser.password,
+        password: generatedPassword,
         options: {
+          emailRedirectTo: `${window.location.origin}/`,
           data: {
-            display_name: newUser.username,
+            display_name: newUsername,
           },
         },
       });
 
       if (error) throw error;
 
-      toast.success(`Benutzer "${newUser.username}" wurde erstellt`);
-      setNewUser({ username: "", password: "", confirmPassword: "" });
-      setShowCreateDialog(false);
+      // Update the profile to require password change
+      if (data.user) {
+        await supabase
+          .from('profiles')
+          .update({ must_change_password: true })
+          .eq('id', data.user.id);
+      }
+
+      // Show success with password
+      setCreatedUser({ username: newUsername, password: generatedPassword });
+      toast.success(`Zugang "${newUsername}" wurde erstellt`);
       
       // Refresh user list
       setTimeout(() => fetchUsers(), 1000);
@@ -121,6 +144,18 @@ export function UserManagement() {
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const copyPassword = () => {
+    navigator.clipboard.writeText(generatedPassword);
+    toast.success("Passwort kopiert!");
+  };
+
+  const closeDialog = () => {
+    setShowCreateDialog(false);
+    setCreatedUser(null);
+    setNewUsername("");
+    setGeneratedPassword("");
   };
 
   const updateUserRole = async (userId: string, newRole: AppRole) => {
@@ -201,7 +236,7 @@ export function UserManagement() {
           <p className="text-xs text-muted-foreground">Zugänge und Berechtigungen verwalten</p>
         </div>
         <div className="flex items-center gap-2">
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <Dialog open={showCreateDialog} onOpenChange={(open) => open ? openCreateDialog() : closeDialog()}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <UserPlus className="h-4 w-4" />
@@ -210,46 +245,104 @@ export function UserManagement() {
             </DialogTrigger>
             <DialogContent className="bg-card border-border">
               <DialogHeader>
-                <DialogTitle>Neuen Zugang erstellen</DialogTitle>
+                <DialogTitle>
+                  {createdUser ? "Zugang erstellt!" : "Neuen Zugang erstellen"}
+                </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <label className="text-sm font-medium">Benutzername</label>
-                  <Input
-                    value={newUser.username}
-                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                    placeholder="z.B. Max Mustermann"
-                    className="bg-secondary/50"
-                  />
+              
+              {createdUser ? (
+                <div className="space-y-4 py-4">
+                  <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4 text-center">
+                    <p className="text-green-400 font-semibold mb-2">
+                      Zugang erfolgreich erstellt!
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Der Benutzer muss beim ersten Login das Passwort ändern.
+                    </p>
+                  </div>
+                  
+                  <div className="bg-secondary/30 rounded-lg p-4 space-y-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground font-semibold">BENUTZERNAME</label>
+                      <p className="font-mono text-lg">{createdUser.username}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground font-semibold">PASSWORT</label>
+                      <div className="flex items-center gap-2">
+                        <p className="font-mono text-lg">
+                          {showPassword ? createdUser.password : "••••••••••••"}
+                        </p>
+                        <button
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                        <button
+                          onClick={copyPassword}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Button onClick={closeDialog} className="w-full">
+                    Schließen
+                  </Button>
                 </div>
-                <div>
-                  <label className="text-sm font-medium">Passwort</label>
-                  <Input
-                    type="password"
-                    value={newUser.password}
-                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                    placeholder="Mindestens 6 Zeichen"
-                    className="bg-secondary/50"
-                  />
+              ) : (
+                <div className="space-y-4 py-4">
+                  <div>
+                    <label className="text-sm font-medium">Benutzername</label>
+                    <Input
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      placeholder="z.B. Max Mustermann"
+                      className="bg-secondary/50"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">Generiertes Passwort</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        value={showPassword ? generatedPassword : "••••••••••••"}
+                        readOnly
+                        className="bg-secondary/50 font-mono"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={copyPassword}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Der Benutzer muss das Passwort beim ersten Login ändern.
+                    </p>
+                  </div>
+                  
+                  <Button 
+                    onClick={handleCreateUser} 
+                    className="w-full"
+                    disabled={isCreating || !newUsername.trim()}
+                  >
+                    {isCreating ? "Wird erstellt..." : "Zugang erstellen"}
+                  </Button>
                 </div>
-                <div>
-                  <label className="text-sm font-medium">Passwort bestätigen</label>
-                  <Input
-                    type="password"
-                    value={newUser.confirmPassword}
-                    onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
-                    placeholder="Passwort wiederholen"
-                    className="bg-secondary/50"
-                  />
-                </div>
-                <Button 
-                  onClick={handleCreateUser} 
-                  className="w-full"
-                  disabled={isCreating}
-                >
-                  {isCreating ? "Wird erstellt..." : "Zugang erstellen"}
-                </Button>
-              </div>
+              )}
             </DialogContent>
           </Dialog>
           <Badge className="bg-primary/20 text-primary border-primary/30 font-semibold">
