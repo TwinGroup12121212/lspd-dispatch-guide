@@ -193,23 +193,34 @@ export function UserManagement() {
   };
 
   const deleteUser = async (userId: string) => {
-    // This removes the user's role and profile, effectively disabling their access
     try {
-      await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId);
+      // Call edge function to completely delete the user from auth (releases email/username)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ userId }),
+        }
+      );
 
-      await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", userId);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || "Fehler beim Löschen");
+      }
 
       setUsers(users.filter((u) => u.id !== userId));
-      toast.success("Zugang entfernt - Benutzer kann sich nicht mehr anmelden");
-    } catch (error) {
+      toast.success("Benutzer vollständig gelöscht - Benutzername wieder verfügbar");
+    } catch (error: unknown) {
       console.error("Error deleting user:", error);
-      toast.error("Fehler beim Löschen des Benutzers");
+      const message = error instanceof Error ? error.message : "Unbekannter Fehler";
+      toast.error("Fehler beim Löschen: " + message);
     }
   };
 
