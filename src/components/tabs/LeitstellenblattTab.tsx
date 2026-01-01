@@ -258,12 +258,12 @@ ${einheitRows
             <label className="text-xs text-muted-foreground font-semibold tracking-wide mb-1.5 block">
               SUPERVISOR
             </label>
-            <Select value={supervisorId} onValueChange={setSupervisorId}>
+            <Select value={supervisorId || "none"} onValueChange={(v) => setSupervisorId(v === "none" ? "" : v)}>
               <SelectTrigger className="bg-secondary/50 border-border">
                 <SelectValue placeholder="Mitarbeiter wählen" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">-</SelectItem>
+                <SelectItem value="none">-</SelectItem>
                 {mitarbeiter.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.dienstnummer} {m.name}
@@ -276,12 +276,12 @@ ${einheitRows
             <label className="text-xs text-muted-foreground font-semibold tracking-wide mb-1.5 block">
               LEITSTELLE
             </label>
-            <Select value={leitstelleId} onValueChange={setLeitstelleId}>
+            <Select value={leitstelleId || "none"} onValueChange={(v) => setLeitstelleId(v === "none" ? "" : v)}>
               <SelectTrigger className="bg-secondary/50 border-border">
                 <SelectValue placeholder="Mitarbeiter wählen" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">-</SelectItem>
+                <SelectItem value="none">-</SelectItem>
                 {mitarbeiter.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.dienstnummer} {m.name}
@@ -338,14 +338,14 @@ ${einheitRows
                 </div>
                 <div className="col-span-4">
                   <Select 
-                    value={row?.mitarbeiter_id || ""} 
-                    onValueChange={(v) => updateEinheitRow(einheit.id, "mitarbeiter_id", v)}
+                    value={row?.mitarbeiter_id || "none"} 
+                    onValueChange={(v) => updateEinheitRow(einheit.id, "mitarbeiter_id", v === "none" ? "" : v)}
                   >
                     <SelectTrigger className="h-9 text-sm bg-secondary/50 border-border">
                       <SelectValue placeholder="Wählen..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">-</SelectItem>
+                      <SelectItem value="none">-</SelectItem>
                       {mitarbeiter.map((m) => (
                         <SelectItem key={m.id} value={m.id}>
                           {m.dienstnummer} {m.name}
@@ -356,14 +356,14 @@ ${einheitRows
                 </div>
                 <div className="col-span-4">
                   <Select 
-                    value={row?.funker_id || ""} 
-                    onValueChange={(v) => updateEinheitRow(einheit.id, "funker_id", v)}
+                    value={row?.funker_id || "none"} 
+                    onValueChange={(v) => updateEinheitRow(einheit.id, "funker_id", v === "none" ? "" : v)}
                   >
                     <SelectTrigger className="h-9 text-sm bg-secondary/50 border-border">
                       <SelectValue placeholder="Wählen..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">-</SelectItem>
+                      <SelectItem value="none">-</SelectItem>
                       {mitarbeiter.map((m) => (
                         <SelectItem key={m.id} value={m.id}>
                           {m.dienstnummer} {m.name}
