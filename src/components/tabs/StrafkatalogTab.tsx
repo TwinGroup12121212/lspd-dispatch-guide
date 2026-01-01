@@ -536,15 +536,15 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
                         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleStartEdit(straftat)}
-                            className="p-1 bg-white/20 rounded hover:bg-white/30"
+                            className="p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-primary hover:text-primary-foreground transition-colors"
                           >
-                            <Edit2 className="h-3 w-3 text-white" />
+                            <Edit2 className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteStraftat(straftat.id)}
-                            className="p-1 bg-white/20 rounded hover:bg-red-600"
+                            className="p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-destructive hover:text-destructive-foreground transition-colors"
                           >
-                            <Trash2 className="h-3 w-3 text-white" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       )}
