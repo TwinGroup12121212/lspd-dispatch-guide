@@ -24,14 +24,16 @@ interface Mitarbeiter {
 const rangOptionen = [
   "Chief of Police",
   "Assistant Chief",
+  "Commander",
   "Captain",
-  "Lieutenant",
+  "Lieutnant",
   "Sergeant",
-  "Senior Lead Officer",
-  "Officer III",
-  "Officer II",
-  "Officer I",
-  "Cadet",
+  "Detective",
+  "Senior Officer",
+  "Officer 3",
+  "Officer 2",
+  "Officer 1",
+  "Rookie",
 ];
 
 const abteilungOptionen = [
@@ -328,16 +330,18 @@ export function PersonalabteilungTab() {
           </div>
         </div>
 
-        <div className="flex justify-center gap-3">
-          <Button onClick={handleSave} className="gap-2">
-            <Save className="h-4 w-4" />
-            Speichern / Aktualisieren
-          </Button>
-          <Button variant="outline" onClick={clearForm} className="gap-2">
-            <span className="text-base">↻</span>
-            Formular leeren
-          </Button>
-        </div>
+        {isAdmin && (
+          <div className="flex justify-center gap-3">
+            <Button onClick={handleSave} className="gap-2">
+              <Save className="h-4 w-4" />
+              {editingId ? "Aktualisieren" : "Speichern"}
+            </Button>
+            <Button variant="outline" onClick={clearForm} className="gap-2">
+              <span className="text-base">↻</span>
+              Formular leeren
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Right Panel - Liste */}
@@ -398,20 +402,22 @@ export function PersonalabteilungTab() {
                   <span className="text-sm text-muted-foreground truncate">{m.rang}</span>
                   <span className="text-sm text-muted-foreground truncate">{m.abteilung}</span>
                   <span className="text-sm text-foreground">{m.status}</span>
-                  <div className="flex justify-end gap-1">
-                    <button
-                      onClick={() => handleEdit(m)}
-                      className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center hover:bg-primary/30 transition-colors"
-                    >
-                      <Pencil className="h-3.5 w-3.5 text-primary" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(m.id)}
-                      className="h-7 w-7 rounded-full bg-destructive/20 flex items-center justify-center hover:bg-destructive/30 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </button>
-                  </div>
+                  {isAdmin && (
+                    <div className="flex justify-end gap-1">
+                      <button
+                        onClick={() => handleEdit(m)}
+                        className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center hover:bg-primary/30 transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-primary" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(m.id)}
+                        className="h-7 w-7 rounded-full bg-destructive/20 flex items-center justify-center hover:bg-destructive/30 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
