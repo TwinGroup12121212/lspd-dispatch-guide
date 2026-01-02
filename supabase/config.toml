@@ -1,1 +1,7 @@
 project_id = "vuftqginmmmjxuvljtfq"
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.reset-password]
+verify_jwt = false
