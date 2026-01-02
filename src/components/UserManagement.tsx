@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, X, Trash2, Shield, User, UserPlus, Copy, Eye, EyeOff } from "lucide-react";
+import { Search, X, Trash2, Shield, User, UserPlus, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +42,9 @@ export function UserManagement() {
   const [showPassword, setShowPassword] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createdUser, setCreatedUser] = useState<{ username: string; password: string } | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<{ id: string; name: string; newPassword: string } | null>(null);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -189,6 +192,46 @@ export function UserManagement() {
     } catch (error) {
       console.error("Error updating role:", error);
       toast.error("Fehler beim Ändern der Rolle");
+    }
+  };
+
+  const resetUserPassword = async (userId: string, displayName: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ userId }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || "Fehler beim Zurücksetzen");
+      }
+
+      setResetPasswordUser({ id: userId, name: displayName, newPassword: result.newPassword });
+      setShowResetDialog(true);
+      setShowResetPassword(false);
+      toast.success("Passwort wurde zurückgesetzt");
+    } catch (error: unknown) {
+      console.error("Error resetting password:", error);
+      const message = error instanceof Error ? error.message : "Unbekannter Fehler";
+      toast.error("Fehler beim Zurücksetzen: " + message);
+    }
+  };
+
+  const copyResetPassword = () => {
+    if (resetPasswordUser) {
+      navigator.clipboard.writeText(resetPasswordUser.newPassword);
+      toast.success("Passwort kopiert!");
     }
   };
 
@@ -431,7 +474,14 @@ export function UserManagement() {
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-1">
+                  <button
+                    onClick={() => resetUserPassword(user.id, user.display_name || "Benutzer")}
+                    className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center hover:bg-primary/30 transition-colors"
+                    title="Passwort zurücksetzen"
+                  >
+                    <KeyRound className="h-3.5 w-3.5 text-primary" />
+                  </button>
                   <button
                     onClick={() => deleteUser(user.id)}
                     className="h-7 w-7 rounded-full bg-destructive/20 flex items-center justify-center hover:bg-destructive/30 transition-colors"
@@ -445,6 +495,58 @@ export function UserManagement() {
           </div>
         )}
       </ScrollArea>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>Passwort zurückgesetzt</DialogTitle>
+          </DialogHeader>
+          {resetPasswordUser && (
+            <div className="space-y-4 py-4">
+              <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4 text-center">
+                <p className="text-green-400 font-semibold mb-2">
+                  Passwort erfolgreich zurückgesetzt!
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Der Benutzer muss beim nächsten Login das Passwort ändern.
+                </p>
+              </div>
+              
+              <div className="bg-secondary/30 rounded-lg p-4 space-y-3">
+                <div>
+                  <label className="text-xs text-muted-foreground font-semibold">BENUTZER</label>
+                  <p className="font-mono text-lg">{resetPasswordUser.name}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground font-semibold">NEUES PASSWORT</label>
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono text-lg">
+                      {showResetPassword ? resetPasswordUser.newPassword : "••••••••••••"}
+                    </p>
+                    <button
+                      onClick={() => setShowResetPassword(!showResetPassword)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                    <button
+                      onClick={copyResetPassword}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <Button onClick={() => setShowResetDialog(false)} className="w-full">
+                Schließen
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="mt-4 pt-4 border-t border-border">
         <p className="text-xs text-muted-foreground">
