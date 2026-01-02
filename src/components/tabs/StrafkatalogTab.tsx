@@ -44,6 +44,8 @@ export function StrafkatalogTab() {
   
   // Edit state
   const [editingStraftat, setEditingStraftat] = useState<Straftat | null>(null);
+  const [editingKategorie, setEditingKategorie] = useState<Kategorie | null>(null);
+  const [showEditKategorieDialog, setShowEditKategorieDialog] = useState(false);
   const [newStraftatKategorie, setNewStraftatKategorie] = useState<string>("");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddKategorieDialog, setShowAddKategorieDialog] = useState(false);
@@ -241,6 +243,50 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
     await releaseLock();
   };
 
+  // Category edit/delete functions
+  const handleEditKategorie = (kategorie: Kategorie) => {
+    setEditingKategorie(kategorie);
+    setShowEditKategorieDialog(true);
+  };
+
+  const handleUpdateKategorie = async () => {
+    if (!editingKategorie) return;
+
+    const { error } = await supabase
+      .from("kategorien")
+      .update({ name: editingKategorie.name })
+      .eq("id", editingKategorie.id);
+
+    if (error) {
+      toast.error("Fehler beim Aktualisieren: " + error.message);
+      return;
+    }
+
+    setKategorien(kategorien.map(k => k.id === editingKategorie.id ? editingKategorie : k));
+    setEditingKategorie(null);
+    setShowEditKategorieDialog(false);
+    toast.success("Kategorie aktualisiert!");
+  };
+
+  const handleDeleteKategorie = async (id: string) => {
+    const kategorieStraftaten = straftaten.filter(s => s.kategorie_id === id);
+    
+    if (kategorieStraftaten.length > 0) {
+      toast.error(`Kategorie enthält ${kategorieStraftaten.length} Vergehen. Bitte zuerst alle Vergehen löschen.`);
+      return;
+    }
+
+    const { error } = await supabase.from("kategorien").delete().eq("id", id);
+
+    if (error) {
+      toast.error("Fehler beim Löschen: " + error.message);
+      return;
+    }
+
+    setKategorien(kategorien.filter(k => k.id !== id));
+    toast.success("Kategorie gelöscht!");
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -402,6 +448,29 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
         </div>
       )}
 
+      {/* Edit Category Dialog */}
+      <Dialog open={showEditKategorieDialog} onOpenChange={setShowEditKategorieDialog}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>Kategorie bearbeiten</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium">Kategoriename</label>
+              <Input
+                value={editingKategorie?.name || ""}
+                onChange={(e) => setEditingKategorie(prev => prev ? { ...prev, name: e.target.value } : null)}
+                placeholder="z.B. Verkehrsdelikte"
+                className="bg-secondary/50"
+              />
+            </div>
+            <Button onClick={handleUpdateKategorie} className="w-full">
+              Speichern
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Kategorien mit Straftaten */}
       {kategorien.map((kategorie) => {
         const kategorieStraftaten = straftaten.filter(s => s.kategorie_id === kategorie.id);
@@ -412,16 +481,35 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
               <h3 className="text-base font-semibold text-foreground">{kategorie.name}</h3>
               
               {isAdmin && (
-                <Dialog open={showAddDialog && newStraftatKategorie === kategorie.id} onOpenChange={(open) => {
-                  setShowAddDialog(open);
-                  if (open) setNewStraftatKategorie(kategorie.id);
-                }}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" className="gap-1.5 bg-red-500 hover:bg-red-600">
-                      <Plus className="h-3.5 w-3.5" />
-                      Vergehen hinzufügen
-                    </Button>
-                  </DialogTrigger>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => handleEditKategorie(kategorie)}
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                    Bearbeiten
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="gap-1.5 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => handleDeleteKategorie(kategorie.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Löschen
+                  </Button>
+                  <Dialog open={showAddDialog && newStraftatKategorie === kategorie.id} onOpenChange={(open) => {
+                    setShowAddDialog(open);
+                    if (open) setNewStraftatKategorie(kategorie.id);
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" className="gap-1.5 bg-red-500 hover:bg-red-600">
+                        <Plus className="h-3.5 w-3.5" />
+                        Vergehen hinzufügen
+                      </Button>
+                    </DialogTrigger>
                   <DialogContent className="bg-card border-border">
                     <DialogHeader>
                       <DialogTitle>Neues Vergehen hinzufügen</DialogTitle>
@@ -478,6 +566,7 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
                     </div>
                   </DialogContent>
                 </Dialog>
+                </div>
               )}
             </div>
             
