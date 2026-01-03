@@ -73,14 +73,22 @@ export function PersonalabteilungTab() {
       setIsLoading(true);
       const { data, error } = await supabase
         .from("mitarbeiter")
-        .select("*")
-        .order("rang", { ascending: true });
+        .select("*");
 
       if (error) {
         console.error("Error fetching mitarbeiter:", error);
         toast.error("Fehler beim Laden der Mitarbeiter");
       } else {
-        setMitarbeiter(data || []);
+        // Sort by rank order
+        const sortedData = (data || []).sort((a, b) => {
+          const indexA = rangOptionen.indexOf(a.rang);
+          const indexB = rangOptionen.indexOf(b.rang);
+          // If rank not found in list, put at end
+          const orderA = indexA === -1 ? rangOptionen.length : indexA;
+          const orderB = indexB === -1 ? rangOptionen.length : indexB;
+          return orderA - orderB;
+        });
+        setMitarbeiter(sortedData);
       }
       setIsLoading(false);
     };
@@ -134,9 +142,17 @@ export function PersonalabteilungTab() {
         return;
       }
 
-      setMitarbeiter(mitarbeiter.map(m => 
+      // Re-sort after update
+      const updated = mitarbeiter.map(m => 
         m.id === editingId ? { ...m, ...formData } as Mitarbeiter : m
-      ));
+      ).sort((a, b) => {
+        const indexA = rangOptionen.indexOf(a.rang);
+        const indexB = rangOptionen.indexOf(b.rang);
+        const orderA = indexA === -1 ? rangOptionen.length : indexA;
+        const orderB = indexB === -1 ? rangOptionen.length : indexB;
+        return orderA - orderB;
+      });
+      setMitarbeiter(updated);
       toast.success("Mitarbeiter aktualisiert!");
     } else {
       // Create new
@@ -161,7 +177,15 @@ export function PersonalabteilungTab() {
       }
 
       if (data) {
-        setMitarbeiter([...mitarbeiter, data]);
+        // Re-sort after adding new employee
+        const updated = [...mitarbeiter, data].sort((a, b) => {
+          const indexA = rangOptionen.indexOf(a.rang);
+          const indexB = rangOptionen.indexOf(b.rang);
+          const orderA = indexA === -1 ? rangOptionen.length : indexA;
+          const orderB = indexB === -1 ? rangOptionen.length : indexB;
+          return orderA - orderB;
+        });
+        setMitarbeiter(updated);
         toast.success("Mitarbeiter hinzugefügt!");
       }
     }

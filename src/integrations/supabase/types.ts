@@ -258,6 +258,7 @@ export type Database = {
           id: string
           kategorie_id: string
           name: string
+          notizen: string | null
           sort_order: number
           typ: Database["public"]["Enums"]["straftat_typ"]
           updated_at: string
@@ -269,6 +270,7 @@ export type Database = {
           id?: string
           kategorie_id: string
           name: string
+          notizen?: string | null
           sort_order?: number
           typ?: Database["public"]["Enums"]["straftat_typ"]
           updated_at?: string
@@ -280,6 +282,7 @@ export type Database = {
           id?: string
           kategorie_id?: string
           name?: string
+          notizen?: string | null
           sort_order?: number
           typ?: Database["public"]["Enums"]["straftat_typ"]
           updated_at?: string

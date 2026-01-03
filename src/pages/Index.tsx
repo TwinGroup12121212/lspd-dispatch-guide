@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Scale, Users, LogOut, Shield, Settings } from "lucide-react";
+import { FileText, Scale, Users, LogOut, Shield, Settings, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,26 @@ export default function Index() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>("leitstellenblatt");
   const [dispatchStatus, setDispatchStatus] = useState("normal");
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+
+  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -65,7 +85,8 @@ export default function Index() {
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-2 text-sm">
                 <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                <span className="text-success font-semibold tracking-wide">DISPATCH ONLINE</span>
+                <Clock className="h-4 w-4 text-success" />
+                <span className="text-success font-semibold tracking-wide font-mono">{formatDateTime(currentDateTime)}</span>
               </span>
               <Select value={dispatchStatus} onValueChange={setDispatchStatus}>
                 <SelectTrigger className="w-28 h-8 text-xs bg-secondary border-border">
