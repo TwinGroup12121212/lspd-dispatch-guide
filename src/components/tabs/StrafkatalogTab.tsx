@@ -218,6 +218,7 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
         typ: editingStraftat.typ,
         geldstrafe: editingStraftat.geldstrafe,
         haftzeit: editingStraftat.haftzeit,
+        notizen: editingStraftat.notizen || null,
       })
       .eq("id", editingStraftat.id);
 
@@ -617,6 +618,15 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
                           />
                         </div>
                       </div>
+                      <div>
+                        <label className="text-sm font-medium">Notizen / Zusatzinformationen</label>
+                        <textarea
+                          value={newStraftat.notizen}
+                          onChange={(e) => setNewStraftat({ ...newStraftat, notizen: e.target.value })}
+                          placeholder="Zusätzliche Hinweise zum Vergehen..."
+                          className="w-full bg-secondary/50 border border-border rounded-md p-2 text-sm min-h-[80px] resize-none"
+                        />
+                      </div>
                       <Button onClick={handleAddStraftat} className="w-full">
                         Hinzufügen
                       </Button>
@@ -657,6 +667,12 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
                           className="bg-white/20 border-white/30 text-white placeholder:text-white/50 h-8"
                         />
                       </div>
+                      <textarea
+                        value={editingStraftat.notizen || ""}
+                        onChange={(e) => setEditingStraftat({ ...editingStraftat, notizen: e.target.value })}
+                        placeholder="Notizen..."
+                        className="w-full bg-white/20 border border-white/30 rounded-md p-2 text-white placeholder:text-white/50 text-xs min-h-[50px] resize-none"
+                      />
                       <div className="flex gap-2">
                         <Button size="sm" onClick={handleUpdateStraftat} className="bg-white/20 hover:bg-white/30 h-7">
                           <Save className="h-3 w-3 mr-1" /> Speichern

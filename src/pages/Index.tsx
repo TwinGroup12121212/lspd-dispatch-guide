@@ -85,8 +85,8 @@ export default function Index() {
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-2 text-sm">
                 <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                <Clock className="h-4 w-4 text-success" />
-                <span className="text-success font-semibold tracking-wide font-mono">{formatDateTime(currentDateTime)}</span>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground font-semibold tracking-wide font-mono">{formatDateTime(currentDateTime)}</span>
               </span>
               <Select value={dispatchStatus} onValueChange={setDispatchStatus}>
                 <SelectTrigger className="w-28 h-8 text-xs bg-secondary border-border">
