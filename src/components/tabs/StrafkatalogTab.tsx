@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Plus, X, Clipboard, Trash2, Edit2, Save, Lock, ExternalLink, FolderPlus } from "lucide-react";
+import { Plus, X, Clipboard, Trash2, Edit2, Save, Lock, ExternalLink, FolderPlus, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -55,7 +55,12 @@ export function StrafkatalogTab() {
     typ: "Verbrechen" as StraftatTyp,
     geldstrafe: 0,
     haftzeit: 0,
+    notizen: "",
   });
+  
+  // Detail view state
+  const [selectedStraftatDetail, setSelectedStraftatDetail] = useState<Straftat | null>(null);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
 
   // Fetch data
   useEffect(() => {
@@ -175,6 +180,7 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
         typ: newStraftat.typ,
         geldstrafe: newStraftat.geldstrafe,
         haftzeit: newStraftat.haftzeit,
+        notizen: newStraftat.notizen || null,
         sort_order: straftaten.filter(s => s.kategorie_id === newStraftatKategorie).length + 1,
       })
       .select()
@@ -187,12 +193,19 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
 
     if (data) {
       setStraftaten([...straftaten, data]);
-      setNewStraftat({ name: "", typ: "Verbrechen", geldstrafe: 0, haftzeit: 0 });
+      setNewStraftat({ name: "", typ: "Verbrechen", geldstrafe: 0, haftzeit: 0, notizen: "" });
       setNewStraftatKategorie("");
       setShowAddDialog(false);
       toast.success("Vergehen hinzugefügt!");
       await releaseLock();
     }
+  };
+  
+  // Handle showing detail view
+  const handleShowDetail = (straftat: Straftat, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedStraftatDetail(straftat);
+    setShowDetailDialog(true);
   };
 
   const handleUpdateStraftat = async () => {
@@ -471,7 +484,51 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
         </DialogContent>
       </Dialog>
 
-      {/* Kategorien mit Straftaten */}
+      {/* Detail View Dialog */}
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Info className="h-5 w-5" />
+              Vergehen-Details
+            </DialogTitle>
+          </DialogHeader>
+          {selectedStraftatDetail && (
+            <div className="space-y-4 py-4">
+              <div className={`${getTypColor(selectedStraftatDetail.typ)} rounded-md p-4`}>
+                <h3 className="font-bold text-white text-lg">{selectedStraftatDetail.name}</h3>
+                <p className="text-white/80 text-sm">{selectedStraftatDetail.typ}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-secondary/30 rounded-md p-3">
+                  <div className="text-xs text-muted-foreground font-semibold mb-1">HAFTZEIT</div>
+                  <div className="text-xl font-bold text-primary">{selectedStraftatDetail.haftzeit} Monate</div>
+                </div>
+                <div className="bg-secondary/30 rounded-md p-3">
+                  <div className="text-xs text-muted-foreground font-semibold mb-1">GELDSTRAFE</div>
+                  <div className="text-xl font-bold text-foreground">${selectedStraftatDetail.geldstrafe.toLocaleString("de-DE")}</div>
+                </div>
+              </div>
+              
+              <div>
+                <div className="text-xs text-muted-foreground font-semibold mb-2">NOTIZEN / ZUSATZINFORMATIONEN</div>
+                <div className="bg-secondary/30 rounded-md p-3 min-h-[80px]">
+                  {selectedStraftatDetail.notizen ? (
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{selectedStraftatDetail.notizen}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Keine Notizen vorhanden</p>
+                  )}
+                </div>
+              </div>
+              
+              <Button onClick={() => { addStraftat(selectedStraftatDetail); setShowDetailDialog(false); }} className="w-full">
+                Zur Auswahl hinzufügen
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       {kategorien.map((kategorie) => {
         const kategorieStraftaten = straftaten.filter(s => s.kategorie_id === kategorie.id);
         
@@ -613,7 +670,16 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
                     <>
                       <div className="flex items-start justify-between mb-2">
                         <span className="font-medium text-sm text-white leading-tight pr-2">{straftat.name}</span>
-                        <span className="text-xs text-white/90 whitespace-nowrap">{straftat.typ}</span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={(e) => handleShowDetail(straftat, e)}
+                            className="p-1 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
+                            title="Details anzeigen"
+                          >
+                            <Info className="h-3.5 w-3.5 text-white" />
+                          </button>
+                          <span className="text-xs text-white/90 whitespace-nowrap">{straftat.typ}</span>
+                        </div>
                       </div>
                       <div className="text-xs text-white/80">
                         {straftat.haftzeit > 0 && <span>{straftat.haftzeit} Monate</span>}
@@ -622,7 +688,7 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
                       </div>
                       
                       {isAdmin && (
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="absolute top-2 right-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleStartEdit(straftat)}
                             className="p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-primary hover:text-primary-foreground transition-colors"
