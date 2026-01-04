@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
-import { Plus, X, Clipboard, Trash2, Edit2, Save, Lock, ExternalLink, FolderPlus, Info } from "lucide-react";
+import { Plus, X, Clipboard, Trash2, Edit2, Save, Lock, ExternalLink, FolderPlus, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -58,9 +59,8 @@ export function StrafkatalogTab() {
     notizen: "",
   });
   
-  // Detail view state
-  const [selectedStraftatDetail, setSelectedStraftatDetail] = useState<Straftat | null>(null);
-  const [showDetailDialog, setShowDetailDialog] = useState(false);
+  // Accordion state - tracks which straftat is expanded
+  const [expandedStraftatId, setExpandedStraftatId] = useState<string | null>(null);
 
   // Fetch data
   useEffect(() => {
@@ -201,11 +201,10 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
     }
   };
   
-  // Handle showing detail view
-  const handleShowDetail = (straftat: Straftat, e: React.MouseEvent) => {
+  // Toggle accordion for detail view
+  const toggleStraftatDetail = (straftatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedStraftatDetail(straftat);
-    setShowDetailDialog(true);
+    setExpandedStraftatId(prev => prev === straftatId ? null : straftatId);
   };
 
   const handleUpdateStraftat = async () => {
@@ -485,51 +484,6 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
         </DialogContent>
       </Dialog>
 
-      {/* Detail View Dialog */}
-      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="bg-card border-border">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5" />
-              Vergehen-Details
-            </DialogTitle>
-          </DialogHeader>
-          {selectedStraftatDetail && (
-            <div className="space-y-4 py-4">
-              <div className={`${getTypColor(selectedStraftatDetail.typ)} rounded-md p-4`}>
-                <h3 className="font-bold text-white text-lg">{selectedStraftatDetail.name}</h3>
-                <p className="text-white/80 text-sm">{selectedStraftatDetail.typ}</p>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-secondary/30 rounded-md p-3">
-                  <div className="text-xs text-muted-foreground font-semibold mb-1">HAFTZEIT</div>
-                  <div className="text-xl font-bold text-primary">{selectedStraftatDetail.haftzeit} Monate</div>
-                </div>
-                <div className="bg-secondary/30 rounded-md p-3">
-                  <div className="text-xs text-muted-foreground font-semibold mb-1">GELDSTRAFE</div>
-                  <div className="text-xl font-bold text-foreground">${selectedStraftatDetail.geldstrafe.toLocaleString("de-DE")}</div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="text-xs text-muted-foreground font-semibold mb-2">NOTIZEN / ZUSATZINFORMATIONEN</div>
-                <div className="bg-secondary/30 rounded-md p-3 min-h-[80px]">
-                  {selectedStraftatDetail.notizen ? (
-                    <p className="text-sm text-foreground whitespace-pre-wrap">{selectedStraftatDetail.notizen}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">Keine Notizen vorhanden</p>
-                  )}
-                </div>
-              </div>
-              
-              <Button onClick={() => { addStraftat(selectedStraftatDetail); setShowDetailDialog(false); }} className="w-full">
-                Zur Auswahl hinzufügen
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
       {kategorien.map((kategorie) => {
         const kategorieStraftaten = straftaten.filter(s => s.kategorie_id === kategorie.id);
         
@@ -637,91 +591,125 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
               )}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="space-y-3">
               {kategorieStraftaten.map((straftat) => (
-                <div
+                <Collapsible
                   key={straftat.id}
-                  className={`${getTypColor(straftat.typ)} rounded-md p-3 cursor-pointer hover:opacity-90 transition-opacity relative group`}
-                  onClick={() => !editingStraftat && addStraftat(straftat)}
+                  open={expandedStraftatId === straftat.id}
+                  onOpenChange={() => setExpandedStraftatId(prev => prev === straftat.id ? null : straftat.id)}
                 >
-                  {editingStraftat?.id === straftat.id ? (
-                    <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-                      <Input
-                        value={editingStraftat.name}
-                        onChange={(e) => setEditingStraftat({ ...editingStraftat, name: e.target.value })}
-                        className="bg-white/20 border-white/30 text-white placeholder:text-white/50 h-8"
-                      />
-                      <div className="grid grid-cols-2 gap-2">
+                  <div className={`${getTypColor(straftat.typ)} rounded-md overflow-hidden`}>
+                    {editingStraftat?.id === straftat.id ? (
+                      <div className="p-3 space-y-2" onClick={(e) => e.stopPropagation()}>
                         <Input
-                          type="number"
-                          value={editingStraftat.haftzeit}
-                          onChange={(e) => setEditingStraftat({ ...editingStraftat, haftzeit: parseInt(e.target.value) || 0 })}
-                          placeholder="Monate"
+                          value={editingStraftat.name}
+                          onChange={(e) => setEditingStraftat({ ...editingStraftat, name: e.target.value })}
                           className="bg-white/20 border-white/30 text-white placeholder:text-white/50 h-8"
                         />
-                        <Input
-                          type="number"
-                          value={editingStraftat.geldstrafe}
-                          onChange={(e) => setEditingStraftat({ ...editingStraftat, geldstrafe: parseInt(e.target.value) || 0 })}
-                          placeholder="Geldstrafe"
-                          className="bg-white/20 border-white/30 text-white placeholder:text-white/50 h-8"
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            type="number"
+                            value={editingStraftat.haftzeit}
+                            onChange={(e) => setEditingStraftat({ ...editingStraftat, haftzeit: parseInt(e.target.value) || 0 })}
+                            placeholder="Monate"
+                            className="bg-white/20 border-white/30 text-white placeholder:text-white/50 h-8"
+                          />
+                          <Input
+                            type="number"
+                            value={editingStraftat.geldstrafe}
+                            onChange={(e) => setEditingStraftat({ ...editingStraftat, geldstrafe: parseInt(e.target.value) || 0 })}
+                            placeholder="Geldstrafe"
+                            className="bg-white/20 border-white/30 text-white placeholder:text-white/50 h-8"
+                          />
+                        </div>
+                        <textarea
+                          value={editingStraftat.notizen || ""}
+                          onChange={(e) => setEditingStraftat({ ...editingStraftat, notizen: e.target.value })}
+                          placeholder="Notizen..."
+                          className="w-full bg-white/20 border border-white/30 rounded-md p-2 text-white placeholder:text-white/50 text-xs min-h-[50px] resize-none"
                         />
-                      </div>
-                      <textarea
-                        value={editingStraftat.notizen || ""}
-                        onChange={(e) => setEditingStraftat({ ...editingStraftat, notizen: e.target.value })}
-                        placeholder="Notizen..."
-                        className="w-full bg-white/20 border border-white/30 rounded-md p-2 text-white placeholder:text-white/50 text-xs min-h-[50px] resize-none"
-                      />
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={handleUpdateStraftat} className="bg-white/20 hover:bg-white/30 h-7">
-                          <Save className="h-3 w-3 mr-1" /> Speichern
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => { setEditingStraftat(null); releaseLock(); }} className="text-white hover:bg-white/20 h-7">
-                          Abbrechen
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="font-medium text-sm text-white leading-tight pr-2">{straftat.name}</span>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={(e) => handleShowDetail(straftat, e)}
-                            className="p-1 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-                            title="Details anzeigen"
-                          >
-                            <Info className="h-3.5 w-3.5 text-white" />
-                          </button>
-                          <span className="text-xs text-white/90 whitespace-nowrap">{straftat.typ}</span>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={handleUpdateStraftat} className="bg-white/20 hover:bg-white/30 h-7">
+                            <Save className="h-3 w-3 mr-1" /> Speichern
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setEditingStraftat(null); releaseLock(); }} className="text-white hover:bg-white/20 h-7">
+                            Abbrechen
+                          </Button>
                         </div>
                       </div>
-                      <div className="text-xs text-white/80">
-                        {straftat.haftzeit > 0 && <span>{straftat.haftzeit} Monate</span>}
-                        {straftat.haftzeit > 0 && straftat.geldstrafe > 0 && <span> - </span>}
-                        {straftat.geldstrafe > 0 && <span>${straftat.geldstrafe.toLocaleString("de-DE")} Geldstrafe</span>}
-                      </div>
-                      
-                      {isAdmin && (
-                        <div className="absolute top-2 right-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => handleStartEdit(straftat)}
-                            className="p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-primary hover:text-primary-foreground transition-colors"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteStraftat(straftat.id)}
-                            className="p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                    ) : (
+                      <>
+                        <CollapsibleTrigger asChild>
+                          <div className="p-3 cursor-pointer hover:opacity-90 transition-opacity relative group">
+                            <div className="flex items-start justify-between mb-2">
+                              <span className="font-medium text-sm text-white leading-tight pr-2">{straftat.name}</span>
+                              <div className="flex items-center gap-1.5">
+                                <ChevronDown className={`h-4 w-4 text-white transition-transform ${expandedStraftatId === straftat.id ? 'rotate-180' : ''}`} />
+                                <span className="text-xs text-white/90 whitespace-nowrap">{straftat.typ}</span>
+                              </div>
+                            </div>
+                            <div className="text-xs text-white/80">
+                              {straftat.haftzeit > 0 && <span>{straftat.haftzeit} Monate</span>}
+                              {straftat.haftzeit > 0 && straftat.geldstrafe > 0 && <span> - </span>}
+                              {straftat.geldstrafe > 0 && <span>${straftat.geldstrafe.toLocaleString("de-DE")} Geldstrafe</span>}
+                            </div>
+                            
+                            {isAdmin && (
+                              <div className="absolute top-2 right-20 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleStartEdit(straftat); }}
+                                  className="p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-primary hover:text-primary-foreground transition-colors"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteStraftat(straftat.id); }}
+                                  className="p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </CollapsibleTrigger>
+                        
+                        <CollapsibleContent>
+                          <div className="px-3 pb-3 pt-0 border-t border-white/20">
+                            <div className="grid grid-cols-2 gap-3 mt-3 mb-3">
+                              <div className="bg-white/10 rounded-md p-2">
+                                <div className="text-xs text-white/70 font-semibold mb-1">HAFTZEIT</div>
+                                <div className="text-lg font-bold text-white">{straftat.haftzeit} Monate</div>
+                              </div>
+                              <div className="bg-white/10 rounded-md p-2">
+                                <div className="text-xs text-white/70 font-semibold mb-1">GELDSTRAFE</div>
+                                <div className="text-lg font-bold text-white">${straftat.geldstrafe.toLocaleString("de-DE")}</div>
+                              </div>
+                            </div>
+                            
+                            <div className="mb-3">
+                              <div className="text-xs text-white/70 font-semibold mb-1">NOTIZEN / ZUSATZINFORMATIONEN</div>
+                              <div className="bg-white/10 rounded-md p-2 min-h-[60px]">
+                                {straftat.notizen ? (
+                                  <p className="text-sm text-white whitespace-pre-wrap">{straftat.notizen}</p>
+                                ) : (
+                                  <p className="text-sm text-white/50 italic">Keine Notizen vorhanden</p>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <Button 
+                              onClick={(e) => { e.stopPropagation(); addStraftat(straftat); }} 
+                              className="w-full bg-white/20 hover:bg-white/30 text-white"
+                              size="sm"
+                            >
+                              Zur Auswahl hinzufügen
+                            </Button>
+                          </div>
+                        </CollapsibleContent>
+                      </>
+                    )}
+                  </div>
+                </Collapsible>
               ))}
             </div>
           </div>

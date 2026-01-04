@@ -42,12 +42,13 @@ interface EinheitRow {
 }
 
 export function LeitstellenblattTab() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([]);
   const [einheiten, setEinheiten] = useState<Einheit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Form state
+  const [leitstellenblattId, setLeitstellenblattId] = useState<string | null>(null);
   const [supervisorId, setSupervisorId] = useState("");
   const [leitstelleId, setLeitstelleId] = useState("");
   const [hinweise, setHinweise] = useState("");
@@ -57,6 +58,9 @@ export function LeitstellenblattTab() {
   const [newUnitName, setNewUnitName] = useState("");
   const [newUnitTyp, setNewUnitTyp] = useState("Adam");
   const [showNewUnit, setShowNewUnit] = useState(false);
+  
+  // Save timeout for debouncing
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -79,27 +83,28 @@ export function LeitstellenblattTab() {
     return () => {
       supabase.removeChannel(mitarbeiterChannel);
       supabase.removeChannel(einheitenChannel);
+      if (saveTimeout) clearTimeout(saveTimeout);
     };
   }, []);
 
-  // Initialize rows when einheiten are loaded
+  // Auto-save when form data changes
   useEffect(() => {
-    if (einheiten.length > 0 && einheitRows.length === 0) {
-      setEinheitRows(
-        einheiten.map((e) => ({
-          id: e.id,
-          einheit_id: e.id,
-          mitarbeiter_id: "",
-          funker_id: "",
-        }))
-      );
-    }
-  }, [einheiten]);
-
-  const fetchData = async () => {
-    await Promise.all([fetchMitarbeiter(), fetchEinheiten()]);
-    setIsLoading(false);
-  };
+    if (!leitstellenblattId || isLoading) return;
+    
+    // Clear previous timeout
+    if (saveTimeout) clearTimeout(saveTimeout);
+    
+    // Set new timeout to save after 1 second of no changes
+    const timeout = setTimeout(() => {
+      saveLeitstellenblatt();
+    }, 1000);
+    
+    setSaveTimeout(timeout);
+    
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [supervisorId, leitstelleId, hinweise, einheitRows]);
 
   const fetchMitarbeiter = async () => {
     const { data, error } = await supabase
@@ -127,6 +132,122 @@ export function LeitstellenblattTab() {
     }
     setEinheiten(data || []);
   };
+
+  const fetchData = async () => {
+    await Promise.all([fetchMitarbeiter(), fetchEinheiten(), fetchLeitstellenblatt()]);
+    setIsLoading(false);
+  };
+
+  const fetchLeitstellenblatt = async () => {
+    // Try to get the single leitstellenblatt record (there should only be one)
+    const { data: leitstellenblattData, error: leitstellenblattError } = await supabase
+      .from('leitstellenblatt')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    
+    if (leitstellenblattError) {
+      console.error("Error fetching leitstellenblatt:", leitstellenblattError);
+      return;
+    }
+    
+    if (leitstellenblattData) {
+      setLeitstellenblattId(leitstellenblattData.id);
+      setSupervisorId(leitstellenblattData.supervisor_id || "");
+      setLeitstelleId(leitstellenblattData.leitstelle_id || "");
+      setHinweise(leitstellenblattData.hinweise || "");
+      
+      // Fetch the einheit assignments
+      const { data: einheitenData } = await supabase
+        .from('leitstellenblatt_einheiten')
+        .select('*')
+        .eq('leitstellenblatt_id', leitstellenblattData.id)
+        .order('sort_order');
+      
+      if (einheitenData && einheitenData.length > 0) {
+        setEinheitRows(einheitenData.map(e => ({
+          id: e.id,
+          einheit_id: e.einheit_id || "",
+          mitarbeiter_id: e.mitarbeiter_id || "",
+          funker_id: e.funker_id || "",
+        })));
+      }
+    } else {
+      // Create a new leitstellenblatt record
+      const { data: newData, error: createError } = await supabase
+        .from('leitstellenblatt')
+        .insert({
+          supervisor_id: null,
+          leitstelle_id: null,
+          hinweise: null,
+          updated_by: user?.id || null,
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error("Error creating leitstellenblatt:", createError);
+        return;
+      }
+      
+      if (newData) {
+        setLeitstellenblattId(newData.id);
+      }
+    }
+  };
+
+  const saveLeitstellenblatt = async () => {
+    if (!leitstellenblattId) return;
+    
+    // Save main leitstellenblatt data
+    await supabase
+      .from('leitstellenblatt')
+      .update({
+        supervisor_id: supervisorId || null,
+        leitstelle_id: leitstelleId || null,
+        hinweise: hinweise || null,
+        updated_by: user?.id || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', leitstellenblattId);
+    
+    // Delete old einheit assignments and insert new ones
+    await supabase
+      .from('leitstellenblatt_einheiten')
+      .delete()
+      .eq('leitstellenblatt_id', leitstellenblattId);
+    
+    // Insert current einheit assignments
+    const einheitenToInsert = einheitRows
+      .filter(r => r.einheit_id)
+      .map((r, index) => ({
+        leitstellenblatt_id: leitstellenblattId,
+        einheit_id: r.einheit_id,
+        mitarbeiter_id: r.mitarbeiter_id || null,
+        funker_id: r.funker_id || null,
+        sort_order: index,
+      }));
+    
+    if (einheitenToInsert.length > 0) {
+      await supabase
+        .from('leitstellenblatt_einheiten')
+        .insert(einheitenToInsert);
+    }
+  };
+
+  // Initialize rows when einheiten are loaded (only if no saved data)
+  useEffect(() => {
+    if (einheiten.length > 0 && einheitRows.length === 0 && !isLoading) {
+      setEinheitRows(
+        einheiten.map((e) => ({
+          id: e.id,
+          einheit_id: e.id,
+          mitarbeiter_id: "",
+          funker_id: "",
+        }))
+      );
+    }
+  }, [einheiten, isLoading]);
 
   const handleAddEinheit = async () => {
     if (!newUnitName.trim()) {

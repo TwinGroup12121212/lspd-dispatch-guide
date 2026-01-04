@@ -110,25 +110,30 @@ export function UserManagement() {
       // Create user with email format based on username
       const email = `${newUsername.toLowerCase().replace(/\s+/g, '.')}@lspd.local`;
       
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password: generatedPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            display_name: newUsername,
+      // Get current session to call edge function
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Use edge function to create user - this does NOT log out the admin
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
           },
-        },
-      });
+          body: JSON.stringify({
+            email,
+            password: generatedPassword,
+            displayName: newUsername,
+          }),
+        }
+      );
 
-      if (error) throw error;
-
-      // Update the profile to require password change
-      if (data.user) {
-        await supabase
-          .from('profiles')
-          .update({ must_change_password: true })
-          .eq('id', data.user.id);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || "Fehler beim Erstellen");
       }
 
       // Show success with password
