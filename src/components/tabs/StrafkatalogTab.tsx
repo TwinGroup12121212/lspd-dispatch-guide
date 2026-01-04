@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
-import { Plus, X, Clipboard, Trash2, Edit2, Save, Lock, ExternalLink, FolderPlus, ChevronDown } from "lucide-react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { Plus, X, Clipboard, Trash2, Edit2, Save, Lock, ExternalLink, FolderPlus, ChevronDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -61,6 +61,20 @@ export function StrafkatalogTab() {
   
   // Accordion state - tracks which straftat is expanded
   const [expandedStraftatId, setExpandedStraftatId] = useState<string | null>(null);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Filter straftaten based on search query
+  const filteredStraftaten = useMemo(() => {
+    if (!searchQuery.trim()) return straftaten;
+    const query = searchQuery.toLowerCase();
+    return straftaten.filter(s => 
+      s.name.toLowerCase().includes(query) ||
+      s.typ.toLowerCase().includes(query) ||
+      s.notizen?.toLowerCase().includes(query)
+    );
+  }, [straftaten, searchQuery]);
 
   // Fetch data
   useEffect(() => {
@@ -310,7 +324,26 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
 
   return (
     <div className="space-y-6">
-      {/* Gesetzbuch Link - ganz oben */}
+      {/* Suchleiste */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Strafen suchen..."
+          className="pl-10 pr-10 bg-secondary/50 border-border"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Gesetzbuch Link */}
       <a
         href="https://docs.google.com/document/d/1mtBevLekozRN3tH0yOAZgBw-C8Yp5qNzUkPMWNFL7zw/edit?tab=t.0"
         target="_blank"
@@ -485,7 +518,10 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
       </Dialog>
 
       {kategorien.map((kategorie) => {
-        const kategorieStraftaten = straftaten.filter(s => s.kategorie_id === kategorie.id);
+        const kategorieStraftaten = filteredStraftaten.filter(s => s.kategorie_id === kategorie.id);
+        
+        // Hide category if no matching straftaten in search
+        if (searchQuery && kategorieStraftaten.length === 0) return null;
         
         return (
           <div key={kategorie.id} className="space-y-3">
