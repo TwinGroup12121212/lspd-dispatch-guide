@@ -62,6 +62,9 @@ export function LeitstellenblattTab() {
   // Save timeout for debouncing
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
 
+  // Track if we're currently saving to prevent realtime loops
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
     fetchData();
     
@@ -80,12 +83,47 @@ export function LeitstellenblattTab() {
       })
       .subscribe();
 
+    // Realtime subscription for leitstellenblatt changes
+    const leitstellenblattChannel = supabase
+      .channel('leitstellenblatt-realtime')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'leitstellenblatt' 
+      }, (payload) => {
+        // Only update if we're not the one saving
+        if (!isSaving && payload.new) {
+          const newData = payload.new as any;
+          setSupervisorId(newData.supervisor_id || "");
+          setLeitstelleId(newData.leitstelle_id || "");
+          setHinweise(newData.hinweise || "");
+        }
+      })
+      .subscribe();
+
+    // Realtime subscription for einheiten assignments
+    const einheitenAssignmentsChannel = supabase
+      .channel('leitstellenblatt-einheiten-realtime')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'leitstellenblatt_einheiten' 
+      }, () => {
+        // Refetch einheit assignments when changes occur
+        if (!isSaving && leitstellenblattId) {
+          fetchEinheitenAssignments();
+        }
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(mitarbeiterChannel);
       supabase.removeChannel(einheitenChannel);
+      supabase.removeChannel(leitstellenblattChannel);
+      supabase.removeChannel(einheitenAssignmentsChannel);
       if (saveTimeout) clearTimeout(saveTimeout);
     };
-  }, []);
+  }, [isSaving, leitstellenblattId]);
 
   // Auto-save when form data changes
   useEffect(() => {
@@ -196,8 +234,29 @@ export function LeitstellenblattTab() {
     }
   };
 
+  const fetchEinheitenAssignments = async () => {
+    if (!leitstellenblattId) return;
+    
+    const { data: einheitenData } = await supabase
+      .from('leitstellenblatt_einheiten')
+      .select('*')
+      .eq('leitstellenblatt_id', leitstellenblattId)
+      .order('sort_order');
+    
+    if (einheitenData && einheitenData.length > 0) {
+      setEinheitRows(einheitenData.map(e => ({
+        id: e.id,
+        einheit_id: e.einheit_id || "",
+        mitarbeiter_id: e.mitarbeiter_id || "",
+        funker_id: e.funker_id || "",
+      })));
+    }
+  };
+
   const saveLeitstellenblatt = async () => {
     if (!leitstellenblattId) return;
+    
+    setIsSaving(true);
     
     // Save main leitstellenblatt data
     await supabase
@@ -233,6 +292,9 @@ export function LeitstellenblattTab() {
         .from('leitstellenblatt_einheiten')
         .insert(einheitenToInsert);
     }
+    
+    // Reset saving flag after a short delay
+    setTimeout(() => setIsSaving(false), 500);
   };
 
   // Initialize rows when einheiten are loaded (only if no saved data)
