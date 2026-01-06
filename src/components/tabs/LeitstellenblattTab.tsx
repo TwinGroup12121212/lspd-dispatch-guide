@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Clipboard, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,10 +60,36 @@ export function LeitstellenblattTab() {
   const [showNewUnit, setShowNewUnit] = useState(false);
   
   // Save timeout for debouncing
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Track if we're currently saving to prevent realtime loops
-  const [isSaving, setIsSaving] = useState(false);
+  // Track if we're currently saving to prevent realtime loops - use ref to avoid stale closures
+  const isSavingRef = useRef(false);
+  const leitstellenblattIdRef = useRef<string | null>(null);
+
+  // Keep refs in sync
+  useEffect(() => {
+    leitstellenblattIdRef.current = leitstellenblattId;
+  }, [leitstellenblattId]);
+
+  const fetchEinheitenAssignments = useCallback(async () => {
+    const currentId = leitstellenblattIdRef.current;
+    if (!currentId) return;
+    
+    const { data: einheitenData } = await supabase
+      .from('leitstellenblatt_einheiten')
+      .select('*')
+      .eq('leitstellenblatt_id', currentId)
+      .order('sort_order');
+    
+    if (einheitenData && einheitenData.length > 0) {
+      setEinheitRows(einheitenData.map(e => ({
+        id: e.id,
+        einheit_id: e.einheit_id || "",
+        mitarbeiter_id: e.mitarbeiter_id || "",
+        funker_id: e.funker_id || "",
+      })));
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -92,7 +118,7 @@ export function LeitstellenblattTab() {
         table: 'leitstellenblatt' 
       }, (payload) => {
         // Only update if we're not the one saving
-        if (!isSaving && payload.new) {
+        if (!isSavingRef.current && payload.new) {
           const newData = payload.new as any;
           setSupervisorId(newData.supervisor_id || "");
           setLeitstelleId(newData.leitstelle_id || "");
@@ -110,7 +136,7 @@ export function LeitstellenblattTab() {
         table: 'leitstellenblatt_einheiten' 
       }, () => {
         // Refetch einheit assignments when changes occur
-        if (!isSaving && leitstellenblattId) {
+        if (!isSavingRef.current && leitstellenblattIdRef.current) {
           fetchEinheitenAssignments();
         }
       })
@@ -121,26 +147,24 @@ export function LeitstellenblattTab() {
       supabase.removeChannel(einheitenChannel);
       supabase.removeChannel(leitstellenblattChannel);
       supabase.removeChannel(einheitenAssignmentsChannel);
-      if (saveTimeout) clearTimeout(saveTimeout);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [isSaving, leitstellenblattId]);
+  }, [fetchEinheitenAssignments]);
 
   // Auto-save when form data changes
   useEffect(() => {
     if (!leitstellenblattId || isLoading) return;
     
     // Clear previous timeout
-    if (saveTimeout) clearTimeout(saveTimeout);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     
     // Set new timeout to save after 1 second of no changes
-    const timeout = setTimeout(() => {
+    saveTimeoutRef.current = setTimeout(() => {
       saveLeitstellenblatt();
     }, 1000);
     
-    setSaveTimeout(timeout);
-    
     return () => {
-      if (timeout) clearTimeout(timeout);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [supervisorId, leitstelleId, hinweise, einheitRows]);
 
@@ -234,29 +258,10 @@ export function LeitstellenblattTab() {
     }
   };
 
-  const fetchEinheitenAssignments = async () => {
-    if (!leitstellenblattId) return;
-    
-    const { data: einheitenData } = await supabase
-      .from('leitstellenblatt_einheiten')
-      .select('*')
-      .eq('leitstellenblatt_id', leitstellenblattId)
-      .order('sort_order');
-    
-    if (einheitenData && einheitenData.length > 0) {
-      setEinheitRows(einheitenData.map(e => ({
-        id: e.id,
-        einheit_id: e.einheit_id || "",
-        mitarbeiter_id: e.mitarbeiter_id || "",
-        funker_id: e.funker_id || "",
-      })));
-    }
-  };
-
   const saveLeitstellenblatt = async () => {
     if (!leitstellenblattId) return;
     
-    setIsSaving(true);
+    isSavingRef.current = true;
     
     // Save main leitstellenblatt data
     await supabase
@@ -294,7 +299,9 @@ export function LeitstellenblattTab() {
     }
     
     // Reset saving flag after a short delay
-    setTimeout(() => setIsSaving(false), 500);
+    setTimeout(() => {
+      isSavingRef.current = false;
+    }, 500);
   };
 
   // Initialize rows when einheiten are loaded (only if no saved data)
