@@ -62,9 +62,10 @@ export function LeitstellenblattTab() {
   // Save timeout for debouncing
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Track if we're currently saving to prevent realtime loops - use ref to avoid stale closures
-  const isSavingRef = useRef(false);
+  // Track pending changes to prevent realtime overwrites
+  const hasPendingChangesRef = useRef(false);
   const leitstellenblattIdRef = useRef<string | null>(null);
+  const lastSavedByRef = useRef<string | null>(null);
 
   // Keep refs in sync
   useEffect(() => {
@@ -73,7 +74,7 @@ export function LeitstellenblattTab() {
 
   const fetchEinheitenAssignments = useCallback(async () => {
     const currentId = leitstellenblattIdRef.current;
-    if (!currentId) return;
+    if (!currentId || hasPendingChangesRef.current) return;
     
     const { data: einheitenData } = await supabase
       .from('leitstellenblatt_einheiten')
@@ -117,13 +118,20 @@ export function LeitstellenblattTab() {
         schema: 'public', 
         table: 'leitstellenblatt' 
       }, (payload) => {
-        // Only update if we're not the one saving
-        if (!isSavingRef.current && payload.new) {
-          const newData = payload.new as any;
-          setSupervisorId(newData.supervisor_id || "");
-          setLeitstelleId(newData.leitstelle_id || "");
-          setHinweise(newData.hinweise || "");
+        // Skip if we have pending changes or this is our own update
+        if (hasPendingChangesRef.current) return;
+        
+        const newData = payload.new as any;
+        if (!newData) return;
+        
+        // Skip if this update was made by us
+        if (newData.updated_by === user?.id && lastSavedByRef.current === user?.id) {
+          return;
         }
+        
+        setSupervisorId(newData.supervisor_id || "");
+        setLeitstelleId(newData.leitstelle_id || "");
+        setHinweise(newData.hinweise || "");
       })
       .subscribe();
 
@@ -135,10 +143,9 @@ export function LeitstellenblattTab() {
         schema: 'public', 
         table: 'leitstellenblatt_einheiten' 
       }, () => {
-        // Refetch einheit assignments when changes occur
-        if (!isSavingRef.current && leitstellenblattIdRef.current) {
-          fetchEinheitenAssignments();
-        }
+        // Skip if we have pending changes
+        if (hasPendingChangesRef.current || !leitstellenblattIdRef.current) return;
+        fetchEinheitenAssignments();
       })
       .subscribe();
 
@@ -149,19 +156,22 @@ export function LeitstellenblattTab() {
       supabase.removeChannel(einheitenAssignmentsChannel);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [fetchEinheitenAssignments]);
+  }, [fetchEinheitenAssignments, user?.id]);
 
   // Auto-save when form data changes
   useEffect(() => {
     if (!leitstellenblattId || isLoading) return;
     
+    // Mark that we have pending changes immediately
+    hasPendingChangesRef.current = true;
+    
     // Clear previous timeout
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     
-    // Set new timeout to save after 1 second of no changes
+    // Set new timeout to save after 800ms of no changes
     saveTimeoutRef.current = setTimeout(() => {
       saveLeitstellenblatt();
-    }, 1000);
+    }, 800);
     
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -261,7 +271,8 @@ export function LeitstellenblattTab() {
   const saveLeitstellenblatt = async () => {
     if (!leitstellenblattId) return;
     
-    isSavingRef.current = true;
+    // Track that we're the one saving
+    lastSavedByRef.current = user?.id || null;
     
     // Save main leitstellenblatt data
     await supabase
@@ -298,10 +309,10 @@ export function LeitstellenblattTab() {
         .insert(einheitenToInsert);
     }
     
-    // Reset saving flag after a short delay
+    // Reset pending changes flag after a delay to ignore our own realtime events
     setTimeout(() => {
-      isSavingRef.current = false;
-    }, 500);
+      hasPendingChangesRef.current = false;
+    }, 1000);
   };
 
   // Initialize rows when einheiten are loaded (only if no saved data)
