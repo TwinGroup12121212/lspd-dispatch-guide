@@ -62,6 +62,9 @@ export function LeitstellenblattTab() {
   // Save timeout for debouncing
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // While we persist changes (delete+insert), ignore realtime echo to prevent UI flicker/reset
+  const isSavingRef = useRef(false);
+
   // Track if initial load is complete to prevent auto-save during init
   const isInitializedRef = useRef(false);
   const leitstellenblattIdRef = useRef<string | null>(null);
@@ -147,9 +150,9 @@ export function LeitstellenblattTab() {
         event: '*', 
         schema: 'public', 
         table: 'leitstellenblatt_einheiten' 
-      }, () => {
-        // Only refetch if we're not currently editing
-        if (leitstellenblattIdRef.current && !saveTimeoutRef.current) {
+       }, () => {
+        // Don't refetch while we're saving, otherwise our own delete/insert briefly clears the UI
+        if (leitstellenblattIdRef.current && !isSavingRef.current) {
           fetchEinheitenAssignments();
         }
       })
@@ -173,8 +176,9 @@ export function LeitstellenblattTab() {
     
     // Set new timeout to save after 800ms of no changes
     saveTimeoutRef.current = setTimeout(() => {
-      saveLeitstellenblatt();
-      saveTimeoutRef.current = null;
+      void saveLeitstellenblatt().finally(() => {
+        saveTimeoutRef.current = null;
+      });
     }, 800);
     
     return () => {
@@ -277,40 +281,45 @@ export function LeitstellenblattTab() {
 
   const saveLeitstellenblatt = async () => {
     if (!leitstellenblattId) return;
-    
-    // Save main leitstellenblatt data
-    await supabase
-      .from('leitstellenblatt')
-      .update({
-        supervisor_id: supervisorId || null,
-        leitstelle_id: leitstelleId || null,
-        hinweise: hinweise || null,
-        updated_by: user?.id || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', leitstellenblattId);
-    
-    // Delete old einheit assignments and insert new ones
-    await supabase
-      .from('leitstellenblatt_einheiten')
-      .delete()
-      .eq('leitstellenblatt_id', leitstellenblattId);
-    
-    // Insert current einheit assignments
-    const einheitenToInsert = einheitRows
-      .filter(r => r.einheit_id)
-      .map((r, index) => ({
-        leitstellenblatt_id: leitstellenblattId,
-        einheit_id: r.einheit_id,
-        mitarbeiter_id: r.mitarbeiter_id || null,
-        funker_id: r.funker_id || null,
-        sort_order: index,
-      }));
-    
-    if (einheitenToInsert.length > 0) {
+
+    isSavingRef.current = true;
+    try {
+      // Save main leitstellenblatt data
+      await supabase
+        .from('leitstellenblatt')
+        .update({
+          supervisor_id: supervisorId || null,
+          leitstelle_id: leitstelleId || null,
+          hinweise: hinweise || null,
+          updated_by: user?.id || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', leitstellenblattId);
+
+      // Delete old einheit assignments and insert new ones
       await supabase
         .from('leitstellenblatt_einheiten')
-        .insert(einheitenToInsert);
+        .delete()
+        .eq('leitstellenblatt_id', leitstellenblattId);
+
+      // Insert current einheit assignments
+      const einheitenToInsert = einheitRows
+        .filter((r) => r.einheit_id)
+        .map((r, index) => ({
+          leitstellenblatt_id: leitstellenblattId,
+          einheit_id: r.einheit_id,
+          mitarbeiter_id: r.mitarbeiter_id || null,
+          funker_id: r.funker_id || null,
+          sort_order: index,
+        }));
+
+      if (einheitenToInsert.length > 0) {
+        await supabase
+          .from('leitstellenblatt_einheiten')
+          .insert(einheitenToInsert);
+      }
+    } finally {
+      isSavingRef.current = false;
     }
   };
 
