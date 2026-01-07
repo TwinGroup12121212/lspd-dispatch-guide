@@ -62,19 +62,29 @@ export function LeitstellenblattTab() {
   // Save timeout for debouncing
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Track pending changes to prevent realtime overwrites
-  const hasPendingChangesRef = useRef(false);
+  // Track if initial load is complete to prevent auto-save during init
+  const isInitializedRef = useRef(false);
   const leitstellenblattIdRef = useRef<string | null>(null);
-  const lastSavedByRef = useRef<string | null>(null);
 
   // Keep refs in sync
   useEffect(() => {
     leitstellenblattIdRef.current = leitstellenblattId;
   }, [leitstellenblattId]);
 
+  // Mark as initialized after loading completes
+  useEffect(() => {
+    if (!isLoading && leitstellenblattId) {
+      // Small delay to ensure all state is settled
+      const timer = setTimeout(() => {
+        isInitializedRef.current = true;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, leitstellenblattId]);
+
   const fetchEinheitenAssignments = useCallback(async () => {
     const currentId = leitstellenblattIdRef.current;
-    if (!currentId || hasPendingChangesRef.current) return;
+    if (!currentId) return;
     
     const { data: einheitenData } = await supabase
       .from('leitstellenblatt_einheiten')
@@ -110,32 +120,27 @@ export function LeitstellenblattTab() {
       })
       .subscribe();
 
-    // Realtime subscription for leitstellenblatt changes
+    // Realtime subscription for leitstellenblatt changes from OTHER users only
     const leitstellenblattChannel = supabase
       .channel('leitstellenblatt-realtime')
       .on('postgres_changes', { 
-        event: '*', 
+        event: 'UPDATE', 
         schema: 'public', 
         table: 'leitstellenblatt' 
       }, (payload) => {
-        // Skip if we have pending changes or this is our own update
-        if (hasPendingChangesRef.current) return;
-        
         const newData = payload.new as any;
         if (!newData) return;
         
-        // Skip if this update was made by us
-        if (newData.updated_by === user?.id && lastSavedByRef.current === user?.id) {
-          return;
+        // Only apply updates from OTHER users
+        if (newData.updated_by !== user?.id) {
+          setSupervisorId(newData.supervisor_id || "");
+          setLeitstelleId(newData.leitstelle_id || "");
+          setHinweise(newData.hinweise || "");
         }
-        
-        setSupervisorId(newData.supervisor_id || "");
-        setLeitstelleId(newData.leitstelle_id || "");
-        setHinweise(newData.hinweise || "");
       })
       .subscribe();
 
-    // Realtime subscription for einheiten assignments
+    // Realtime subscription for einheiten assignments from OTHER users
     const einheitenAssignmentsChannel = supabase
       .channel('leitstellenblatt-einheiten-realtime')
       .on('postgres_changes', { 
@@ -143,9 +148,10 @@ export function LeitstellenblattTab() {
         schema: 'public', 
         table: 'leitstellenblatt_einheiten' 
       }, () => {
-        // Skip if we have pending changes
-        if (hasPendingChangesRef.current || !leitstellenblattIdRef.current) return;
-        fetchEinheitenAssignments();
+        // Only refetch if we're not currently editing
+        if (leitstellenblattIdRef.current && !saveTimeoutRef.current) {
+          fetchEinheitenAssignments();
+        }
       })
       .subscribe();
 
@@ -158,12 +164,9 @@ export function LeitstellenblattTab() {
     };
   }, [fetchEinheitenAssignments, user?.id]);
 
-  // Auto-save when form data changes
+  // Auto-save when form data changes - only after initialization
   useEffect(() => {
-    if (!leitstellenblattId || isLoading) return;
-    
-    // Mark that we have pending changes immediately
-    hasPendingChangesRef.current = true;
+    if (!leitstellenblattId || isLoading || !isInitializedRef.current) return;
     
     // Clear previous timeout
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -171,10 +174,14 @@ export function LeitstellenblattTab() {
     // Set new timeout to save after 800ms of no changes
     saveTimeoutRef.current = setTimeout(() => {
       saveLeitstellenblatt();
+      saveTimeoutRef.current = null;
     }, 800);
     
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
     };
   }, [supervisorId, leitstelleId, hinweise, einheitRows]);
 
@@ -271,9 +278,6 @@ export function LeitstellenblattTab() {
   const saveLeitstellenblatt = async () => {
     if (!leitstellenblattId) return;
     
-    // Track that we're the one saving
-    lastSavedByRef.current = user?.id || null;
-    
     // Save main leitstellenblatt data
     await supabase
       .from('leitstellenblatt')
@@ -308,11 +312,6 @@ export function LeitstellenblattTab() {
         .from('leitstellenblatt_einheiten')
         .insert(einheitenToInsert);
     }
-    
-    // Reset pending changes flag after a delay to ignore our own realtime events
-    setTimeout(() => {
-      hasPendingChangesRef.current = false;
-    }, 1000);
   };
 
   // Initialize rows when einheiten are loaded (only if no saved data)
