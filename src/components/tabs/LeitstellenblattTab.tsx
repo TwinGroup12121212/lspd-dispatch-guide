@@ -85,25 +85,44 @@ export function LeitstellenblattTab() {
     }
   }, [isLoading, leitstellenblattId]);
 
+  const collapseDbEinheitenAssignments = useCallback((rows: any[]): EinheitRow[] => {
+    const map = new Map<string, EinheitRow>();
+
+    for (const r of rows ?? []) {
+      const einheitId = r?.einheit_id ?? "";
+      if (!einheitId) continue;
+
+      const next: EinheitRow = {
+        id: r.id,
+        einheit_id: einheitId,
+        mitarbeiter_id: r.mitarbeiter_id ?? "",
+        funker_id: r.funker_id ?? "",
+      };
+
+      const hasValues = Boolean(next.mitarbeiter_id || next.funker_id);
+      if (!map.has(einheitId) || hasValues) {
+        // Only overwrite if we actually have data (prevents null-rows from clearing selections)
+        map.set(einheitId, next);
+      }
+    }
+
+    return Array.from(map.values());
+  }, []);
+
   const fetchEinheitenAssignments = useCallback(async () => {
     const currentId = leitstellenblattIdRef.current;
     if (!currentId) return;
-    
+
     const { data: einheitenData } = await supabase
       .from('leitstellenblatt_einheiten')
       .select('*')
       .eq('leitstellenblatt_id', currentId)
       .order('sort_order');
-    
-    if (einheitenData && einheitenData.length > 0) {
-      setEinheitRows(einheitenData.map(e => ({
-        id: e.id,
-        einheit_id: e.einheit_id || "",
-        mitarbeiter_id: e.mitarbeiter_id || "",
-        funker_id: e.funker_id || "",
-      })));
+
+    if (einheitenData) {
+      setEinheitRows(collapseDbEinheitenAssignments(einheitenData));
     }
-  }, []);
+  }, [collapseDbEinheitenAssignments]);
 
   useEffect(() => {
     fetchData();
@@ -246,14 +265,9 @@ export function LeitstellenblattTab() {
         .select('*')
         .eq('leitstellenblatt_id', leitstellenblattData.id)
         .order('sort_order');
-      
-      if (einheitenData && einheitenData.length > 0) {
-        setEinheitRows(einheitenData.map(e => ({
-          id: e.id,
-          einheit_id: e.einheit_id || "",
-          mitarbeiter_id: e.mitarbeiter_id || "",
-          funker_id: e.funker_id || "",
-        })));
+
+      if (einheitenData) {
+        setEinheitRows(collapseDbEinheitenAssignments(einheitenData));
       }
     } else {
       // Create a new leitstellenblatt record
@@ -302,16 +316,38 @@ export function LeitstellenblattTab() {
         .delete()
         .eq('leitstellenblatt_id', leitstellenblattId);
 
-      // Insert current einheit assignments
-      const einheitenToInsert = einheitRows
-        .filter((r) => r.einheit_id)
-        .map((r, index) => ({
-          leitstellenblatt_id: leitstellenblattId,
-          einheit_id: r.einheit_id,
-          mitarbeiter_id: r.mitarbeiter_id || null,
-          funker_id: r.funker_id || null,
-          sort_order: index,
-        }));
+      // Insert current einheit assignments (deduped + in stable unit order)
+      const uniqueByEinheit = new Map<string, EinheitRow>();
+      for (let i = einheitRows.length - 1; i >= 0; i--) {
+        const r = einheitRows[i];
+        if (!r?.einheit_id) continue;
+
+        const hasValues = Boolean(r.mitarbeiter_id || r.funker_id);
+        if (!uniqueByEinheit.has(r.einheit_id) || hasValues) {
+          uniqueByEinheit.set(r.einheit_id, r);
+        }
+      }
+
+      const einheitenToInsert = einheiten
+        .map((e, index) => {
+          const r = uniqueByEinheit.get(e.id);
+          if (!r) return null;
+          if (!r.mitarbeiter_id && !r.funker_id) return null;
+          return {
+            leitstellenblatt_id: leitstellenblattId,
+            einheit_id: e.id,
+            mitarbeiter_id: r.mitarbeiter_id || null,
+            funker_id: r.funker_id || null,
+            sort_order: index,
+          };
+        })
+        .filter(Boolean) as Array<{
+          leitstellenblatt_id: string;
+          einheit_id: string;
+          mitarbeiter_id: string | null;
+          funker_id: string | null;
+          sort_order: number;
+        }>;
 
       if (einheitenToInsert.length > 0) {
         await supabase
