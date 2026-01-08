@@ -65,6 +65,9 @@ export function LeitstellenblattTab() {
   // While we persist changes (delete+insert), ignore realtime echo to prevent UI flicker/reset
   const isSavingRef = useRef(false);
 
+  // While user is editing (before autosave flush), ignore realtime echo to prevent selections snapping back
+  const hasUnsavedChangesRef = useRef(false);
+
   // Track if initial load is complete to prevent auto-save during init
   const isInitializedRef = useRef(false);
   const leitstellenblattIdRef = useRef<string | null>(null);
@@ -169,12 +172,12 @@ export function LeitstellenblattTab() {
         event: '*', 
         schema: 'public', 
         table: 'leitstellenblatt_einheiten' 
-      }, () => {
-        // Don't refetch while we're saving, otherwise our own delete/insert briefly clears the UI
-        if (leitstellenblattIdRef.current && !isSavingRef.current) {
-          fetchEinheitenAssignments();
-        }
-      })
+       }, () => {
+         // Don't refetch while we're saving OR while we have local unsaved edits, otherwise selections can snap back
+         if (leitstellenblattIdRef.current && !isSavingRef.current && !hasUnsavedChangesRef.current) {
+           fetchEinheitenAssignments();
+         }
+       })
       .subscribe();
 
     return () => {
@@ -299,7 +302,7 @@ export function LeitstellenblattTab() {
     isSavingRef.current = true;
     try {
       // Save main leitstellenblatt data
-      await supabase
+      const { error: mainError } = await supabase
         .from('leitstellenblatt')
         .update({
           supervisor_id: supervisorId || null,
@@ -310,11 +313,23 @@ export function LeitstellenblattTab() {
         })
         .eq('id', leitstellenblattId);
 
+      if (mainError) {
+        console.error(mainError);
+        toast.error("Speichern fehlgeschlagen (Leitstellenblatt)");
+        return;
+      }
+
       // Delete old einheit assignments and insert new ones
-      await supabase
+      const { error: deleteError } = await supabase
         .from('leitstellenblatt_einheiten')
         .delete()
         .eq('leitstellenblatt_id', leitstellenblattId);
+
+      if (deleteError) {
+        console.error(deleteError);
+        toast.error("Speichern fehlgeschlagen (Einheiten löschen)");
+        return;
+      }
 
       // Insert current einheit assignments (deduped + in stable unit order)
       const uniqueByEinheit = new Map<string, EinheitRow>();
@@ -350,10 +365,19 @@ export function LeitstellenblattTab() {
         }>;
 
       if (einheitenToInsert.length > 0) {
-        await supabase
+        const { error: insertError } = await supabase
           .from('leitstellenblatt_einheiten')
           .insert(einheitenToInsert);
+
+        if (insertError) {
+          console.error(insertError);
+          toast.error("Speichern fehlgeschlagen (Einheiten speichern)");
+          return;
+        }
       }
+
+      // Only mark clean if everything succeeded
+      hasUnsavedChangesRef.current = false;
     } finally {
       isSavingRef.current = false;
     }
@@ -427,6 +451,8 @@ export function LeitstellenblattTab() {
   };
 
   const updateEinheitRow = (einheitId: string, field: keyof EinheitRow, value: string) => {
+    hasUnsavedChangesRef.current = true;
+
     setEinheitRows(prev => {
       // Check if row exists for this einheit
       const existingIndex = prev.findIndex(r => r.einheit_id === einheitId);
