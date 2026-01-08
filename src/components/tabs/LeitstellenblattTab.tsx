@@ -150,7 +150,7 @@ export function LeitstellenblattTab() {
         event: '*', 
         schema: 'public', 
         table: 'leitstellenblatt_einheiten' 
-       }, () => {
+      }, () => {
         // Don't refetch while we're saving, otherwise our own delete/insert briefly clears the UI
         if (leitstellenblattIdRef.current && !isSavingRef.current) {
           fetchEinheitenAssignments();
@@ -323,7 +323,7 @@ export function LeitstellenblattTab() {
     }
   };
 
-  // Initialize rows when einheiten are loaded (only if no saved data)
+  // Initialize rows when einheiten are loaded (only if no saved data exists)
   useEffect(() => {
     if (einheiten.length > 0 && einheitRows.length === 0 && !isLoading) {
       setEinheitRows(
@@ -335,7 +335,7 @@ export function LeitstellenblattTab() {
         }))
       );
     }
-  }, [einheiten, isLoading]);
+  }, [einheiten, einheitRows.length, isLoading]);
 
   const handleAddEinheit = async () => {
     if (!newUnitName.trim()) {
@@ -391,9 +391,28 @@ export function LeitstellenblattTab() {
   };
 
   const updateEinheitRow = (einheitId: string, field: keyof EinheitRow, value: string) => {
-    setEinheitRows(einheitRows.map(r => 
-      r.einheit_id === einheitId ? { ...r, [field]: value } : r
-    ));
+    setEinheitRows(prev => {
+      // Check if row exists for this einheit
+      const existingIndex = prev.findIndex(r => r.einheit_id === einheitId);
+      if (existingIndex >= 0) {
+        // Update existing row
+        return prev.map(r => 
+          r.einheit_id === einheitId ? { ...r, [field]: value } : r
+        );
+      } else {
+        // Create new row for this einheit
+        return [...prev, {
+          id: einheitId,
+          einheit_id: einheitId,
+          mitarbeiter_id: field === 'mitarbeiter_id' ? value : "",
+          funker_id: field === 'funker_id' ? value : "",
+        }];
+      }
+    });
+  };
+
+  const getRowForEinheit = (einheitId: string): EinheitRow | undefined => {
+    return einheitRows.find(r => r.einheit_id === einheitId);
   };
 
   const getMitarbeiterDisplay = (id: string): string => {
@@ -431,9 +450,13 @@ LAGE / HINWEISE:
 ${hinweise || "-"}
 
 EINGETEILTE EINHEITEN:
-${einheitRows
-  .filter(r => r.mitarbeiter_id || r.funker_id)
-  .map(r => `${getEinheitName(r.einheit_id)} | ${getMitarbeiterDisplay(r.mitarbeiter_id) || "-"} | ${getMitarbeiterDisplay(r.funker_id) || "-"}`)
+${einheiten
+  .map(e => {
+    const row = getRowForEinheit(e.id);
+    if (!row?.mitarbeiter_id && !row?.funker_id) return null;
+    return `${e.name} | ${getMitarbeiterDisplay(row?.mitarbeiter_id || "") || "-"} | ${getMitarbeiterDisplay(row?.funker_id || "") || "-"}`;
+  })
+  .filter(Boolean)
   .join("\n")}
 `;
     navigator.clipboard.writeText(text);
@@ -537,7 +560,7 @@ ${einheitRows
         {/* Table Rows */}
         <div className="space-y-1.5 mb-4 max-h-[300px] overflow-y-auto">
           {einheiten.map((einheit) => {
-            const row = einheitRows.find(r => r.einheit_id === einheit.id);
+            const row = getRowForEinheit(einheit.id);
             return (
               <div key={einheit.id} className="grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-3">
