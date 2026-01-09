@@ -65,6 +65,9 @@ export function LeitstellenblattTab() {
   // While we persist changes (delete+insert), ignore any refetch to prevent UI flicker/reset
   const isSavingRef = useRef(false);
 
+  // When we apply data coming from the server (initial load / other user), do not autosave it back
+  const suppressAutosaveRef = useRef(false);
+
   // Track if initial load is complete to prevent auto-save during init
   const isInitializedRef = useRef(false);
   const leitstellenblattIdRef = useRef<string | null>(null);
@@ -155,11 +158,16 @@ export function LeitstellenblattTab() {
         
         // Only apply updates from OTHER users
         if (newData.updated_by !== user?.id) {
+          // Apply remote changes without echo-saving them back
+          suppressAutosaveRef.current = true;
+
           setSupervisorId(newData.supervisor_id || "");
           setLeitstelleId(newData.leitstelle_id || "");
           setHinweise(newData.hinweise || "");
-          // After other user's update, also refetch einheiten assignments
-          fetchEinheitenAssignments();
+
+          void fetchEinheitenAssignments().finally(() => {
+            suppressAutosaveRef.current = false;
+          });
         }
       })
       .subscribe();
@@ -181,24 +189,25 @@ export function LeitstellenblattTab() {
   // Auto-save when form data changes - only after initialization
   useEffect(() => {
     if (!leitstellenblattId || isLoading || !isInitializedRef.current) return;
-    
+    if (suppressAutosaveRef.current || isSavingRef.current) return;
+
     // Clear previous timeout
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    
+
     // Set new timeout to save after 800ms of no changes
     saveTimeoutRef.current = setTimeout(() => {
       void saveLeitstellenblatt().finally(() => {
         saveTimeoutRef.current = null;
       });
     }, 800);
-    
+
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = null;
       }
     };
-  }, [supervisorId, leitstelleId, hinweise, einheitRows]);
+  }, [supervisorId, leitstelleId, hinweise, einheitRows, isLoading, leitstellenblattId]);
 
   const fetchMitarbeiter = async () => {
     const { data, error } = await supabase
@@ -320,7 +329,7 @@ export function LeitstellenblattTab() {
         return;
       }
 
-      // Insert current einheit assignments (deduped + in stable unit order)
+      // Insert current einheit assignments (deduped)
       const uniqueByEinheit = new Map<string, EinheitRow>();
       for (let i = einheitRows.length - 1; i >= 0; i--) {
         const r = einheitRows[i];
@@ -332,26 +341,18 @@ export function LeitstellenblattTab() {
         }
       }
 
-      const einheitenToInsert = einheiten
-        .map((e, index) => {
-          const r = uniqueByEinheit.get(e.id);
-          if (!r) return null;
-          if (!r.mitarbeiter_id && !r.funker_id) return null;
-          return {
-            leitstellenblatt_id: leitstellenblattId,
-            einheit_id: e.id,
-            mitarbeiter_id: r.mitarbeiter_id || null,
-            funker_id: r.funker_id || null,
-            sort_order: index,
-          };
-        })
-        .filter(Boolean) as Array<{
-          leitstellenblatt_id: string;
-          einheit_id: string;
-          mitarbeiter_id: string | null;
-          funker_id: string | null;
-          sort_order: number;
-        }>;
+      const sortOrderByEinheit = new Map(einheiten.map((e, idx) => [e.id, idx] as const));
+
+      const einheitenToInsert = Array.from(uniqueByEinheit.values())
+        .filter((r) => Boolean(r.mitarbeiter_id || r.funker_id))
+        .map((r) => ({
+          leitstellenblatt_id: leitstellenblattId,
+          einheit_id: r.einheit_id,
+          mitarbeiter_id: r.mitarbeiter_id || null,
+          funker_id: r.funker_id || null,
+          sort_order: sortOrderByEinheit.get(r.einheit_id) ?? 0,
+        }))
+        .sort((a, b) => a.sort_order - b.sort_order);
 
       if (einheitenToInsert.length > 0) {
         const { error: insertError } = await supabase
@@ -364,9 +365,6 @@ export function LeitstellenblattTab() {
           return;
         }
       }
-
-      // Sync freshly saved data to ensure UI is correct
-      await fetchEinheitenAssignments();
     } finally {
       isSavingRef.current = false;
     }
