@@ -62,11 +62,8 @@ export function LeitstellenblattTab() {
   // Save timeout for debouncing
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // While we persist changes (delete+insert), ignore realtime echo to prevent UI flicker/reset
+  // While we persist changes (delete+insert), ignore any refetch to prevent UI flicker/reset
   const isSavingRef = useRef(false);
-
-  // While user is editing (before autosave flush), ignore realtime echo to prevent selections snapping back
-  const hasUnsavedChangesRef = useRef(false);
 
   // Track if initial load is complete to prevent auto-save during init
   const isInitializedRef = useRef(false);
@@ -161,30 +158,22 @@ export function LeitstellenblattTab() {
           setSupervisorId(newData.supervisor_id || "");
           setLeitstelleId(newData.leitstelle_id || "");
           setHinweise(newData.hinweise || "");
+          // After other user's update, also refetch einheiten assignments
+          fetchEinheitenAssignments();
         }
       })
       .subscribe();
 
-    // Realtime subscription for einheiten assignments from OTHER users
-    const einheitenAssignmentsChannel = supabase
-      .channel('leitstellenblatt-einheiten-realtime')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'leitstellenblatt_einheiten' 
-       }, () => {
-         // Don't refetch while we're saving OR while we have local unsaved edits, otherwise selections can snap back
-         if (leitstellenblattIdRef.current && !isSavingRef.current && !hasUnsavedChangesRef.current) {
-           fetchEinheitenAssignments();
-         }
-       })
-      .subscribe();
+    // NOTE: We removed the realtime subscription for leitstellenblatt_einheiten
+    // because it caused selections to snap back during/after edit.
+    // Instead, we sync einheiten assignments:
+    // 1. After our own autosave completes
+    // 2. When another user updates leitstellenblatt (triggered above)
 
     return () => {
       supabase.removeChannel(mitarbeiterChannel);
       supabase.removeChannel(einheitenChannel);
       supabase.removeChannel(leitstellenblattChannel);
-      supabase.removeChannel(einheitenAssignmentsChannel);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [fetchEinheitenAssignments, user?.id]);
@@ -376,8 +365,8 @@ export function LeitstellenblattTab() {
         }
       }
 
-      // Only mark clean if everything succeeded
-      hasUnsavedChangesRef.current = false;
+      // Sync freshly saved data to ensure UI is correct
+      await fetchEinheitenAssignments();
     } finally {
       isSavingRef.current = false;
     }
@@ -451,7 +440,6 @@ export function LeitstellenblattTab() {
   };
 
   const updateEinheitRow = (einheitId: string, field: keyof EinheitRow, value: string) => {
-    hasUnsavedChangesRef.current = true;
 
     setEinheitRows(prev => {
       // Check if row exists for this einheit
