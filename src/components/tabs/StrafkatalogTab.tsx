@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Plus, X, Clipboard, Trash2, Edit2, Save, Lock, ExternalLink, FolderPlus, ChevronDown, Search } from "lucide-react";
+import { Plus, X, Clipboard, Trash2, Edit2, Save, ExternalLink, FolderPlus, ChevronDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,7 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useStrafkatalogLock } from "@/hooks/useStrafkatalogLock";
+import { logAudit } from "@/lib/auditLog";
 import type { Tables, Enums } from "@/integrations/supabase/types";
 
 type Kategorie = Tables<"kategorien">;
@@ -36,7 +36,6 @@ const getTypColor = (typ: StraftatTyp) => {
 
 export function StrafkatalogTab() {
   const { isAdmin } = useAuth();
-  const { lockInfo, isLocked, isMyLock, remainingSeconds, acquireLock, releaseLock, canEdit } = useStrafkatalogLock();
   
   const [kategorien, setKategorien] = useState<Kategorie[]>([]);
   const [straftaten, setStraftaten] = useState<Straftat[]>([]);
@@ -95,19 +94,9 @@ export function StrafkatalogTab() {
     fetchData();
   }, []);
 
-  // Acquire lock when starting to edit
-  const handleStartEdit = async (straftat: Straftat) => {
-    if (!canEdit) {
-      toast.error(`Strafkatalog ist gesperrt von ${lockInfo?.user_name}`);
-      return;
-    }
-    
-    const acquired = await acquireLock();
-    if (acquired) {
-      setEditingStraftat(straftat);
-    } else {
-      toast.error("Konnte Bearbeitung nicht starten - jemand anderes bearbeitet gerade");
-    }
+  // Start editing directly (no lock needed)
+  const handleStartEdit = (straftat: Straftat) => {
+    setEditingStraftat(straftat);
   };
 
   const addStraftat = useCallback((straftat: Straftat) => {
@@ -180,12 +169,6 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
       return;
     }
 
-    const acquired = await acquireLock();
-    if (!acquired) {
-      toast.error("Konnte Bearbeitung nicht starten");
-      return;
-    }
-
     const { data, error } = await supabase
       .from("straftaten")
       .insert({
@@ -211,7 +194,15 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
       setNewStraftatKategorie("");
       setShowAddDialog(false);
       toast.success("Vergehen hinzugefügt!");
-      await releaseLock();
+      
+      // Log audit
+      await logAudit({
+        action: "INSERT",
+        tableName: "straftaten",
+        recordId: data.id,
+        newData: data,
+        description: `Straftat "${data.name}" hinzugefügt`,
+      });
     }
   };
   
@@ -223,6 +214,8 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
 
   const handleUpdateStraftat = async () => {
     if (!editingStraftat) return;
+
+    const oldStraftat = straftaten.find(s => s.id === editingStraftat.id);
 
     const { error } = await supabase
       .from("straftaten")
@@ -243,20 +236,20 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
     setStraftaten(straftaten.map(s => s.id === editingStraftat.id ? editingStraftat : s));
     setEditingStraftat(null);
     toast.success("Vergehen aktualisiert!");
-    await releaseLock();
+    
+    // Log audit
+    await logAudit({
+      action: "UPDATE",
+      tableName: "straftaten",
+      recordId: editingStraftat.id,
+      oldData: oldStraftat,
+      newData: editingStraftat,
+      description: `Straftat "${editingStraftat.name}" bearbeitet`,
+    });
   };
 
   const handleDeleteStraftat = async (id: string) => {
-    if (!canEdit) {
-      toast.error(`Strafkatalog ist gesperrt von ${lockInfo?.user_name}`);
-      return;
-    }
-
-    const acquired = await acquireLock();
-    if (!acquired) {
-      toast.error("Konnte Löschung nicht durchführen");
-      return;
-    }
+    const straftatToDelete = straftaten.find(s => s.id === id);
 
     const { error } = await supabase.from("straftaten").delete().eq("id", id);
 
@@ -267,7 +260,17 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
 
     setStraftaten(straftaten.filter(s => s.id !== id));
     toast.success("Vergehen gelöscht!");
-    await releaseLock();
+    
+    // Log audit
+    if (straftatToDelete) {
+      await logAudit({
+        action: "DELETE",
+        tableName: "straftaten",
+        recordId: id,
+        oldData: straftatToDelete,
+        description: `Straftat "${straftatToDelete.name}" gelöscht`,
+      });
+    }
   };
 
   // Category edit/delete functions
@@ -354,34 +357,6 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
         <span className="font-semibold text-primary">Gesetzbuch öffnen</span>
       </a>
 
-      {/* Lock Status Banner */}
-      {isLocked && !isMyLock && (
-        <div className="bg-amber-500/20 border border-amber-500/30 rounded-lg p-4 flex items-center gap-3">
-          <Lock className="h-5 w-5 text-amber-400" />
-          <div>
-            <p className="text-amber-400 font-semibold">
-              Strafkatalog wird bearbeitet von {lockInfo?.user_name}
-            </p>
-            <p className="text-amber-400/80 text-sm">
-              Automatische Freigabe in {remainingSeconds} Sekunden
-            </p>
-          </div>
-        </div>
-      )}
-
-      {isMyLock && (
-        <div className="bg-primary/20 border border-primary/30 rounded-lg p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Lock className="h-5 w-5 text-primary" />
-            <p className="text-primary font-semibold">
-              Du bearbeitest den Strafkatalog (noch {remainingSeconds} Sekunden)
-            </p>
-          </div>
-          <Button variant="outline" size="sm" onClick={releaseLock}>
-            Bearbeitung beenden
-          </Button>
-        </div>
-      )}
 
       {/* Zusammenfassung oben */}
       <div className="bg-card/50 border border-border rounded-lg p-5">
@@ -668,7 +643,7 @@ ${ausgewaehlteStraftaten.map((s) => `- ${s.name}: ${s.haftzeit} Monate${s.geldst
                           <Button size="sm" onClick={handleUpdateStraftat} className="bg-white/20 hover:bg-white/30 h-7">
                             <Save className="h-3 w-3 mr-1" /> Speichern
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => { setEditingStraftat(null); releaseLock(); }} className="text-white hover:bg-white/20 h-7">
+                          <Button size="sm" variant="ghost" onClick={() => setEditingStraftat(null)} className="text-white hover:bg-white/20 h-7">
                             Abbrechen
                           </Button>
                         </div>

@@ -1,22 +1,21 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Scale, Users, LogOut, Shield, Settings, Clock } from "lucide-react";
+import { Scale, Users, LogOut, Shield, Settings, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { StrafkatalogTab } from "@/components/tabs/StrafkatalogTab";
 import { PersonalabteilungTab } from "@/components/tabs/PersonalabteilungTab";
-import { LeitstellenblattTab } from "@/components/tabs/LeitstellenblattTab";
-import { UserManagement } from "@/components/UserManagement";
+import { VerwaltungTab } from "@/components/VerwaltungTab";
 import { useAuth } from "@/hooks/useAuth";
 
-type TabType = "leitstellenblatt" | "strafkatalog" | "personalabteilung" | "verwaltung";
+type TabType = "strafkatalog" | "personalabteilung" | "verwaltung";
 
 export default function Index() {
   const { user, isAdmin, isLoading, displayName, signOut } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>("leitstellenblatt");
+  const [activeTab, setActiveTab] = useState<TabType>("strafkatalog");
   const [dispatchStatus, setDispatchStatus] = useState("normal");
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
@@ -45,9 +44,8 @@ export default function Index() {
   };
 
   const tabs = [
-    { id: "leitstellenblatt" as TabType, label: "LEITSTELLENBLATT", icon: FileText },
     { id: "strafkatalog" as TabType, label: "STRAFKATALOG", icon: Scale },
-    { id: "personalabteilung" as TabType, label: "PERSONALABTEILUNG", icon: Users, emoji: "👮🔧" },
+    { id: "personalabteilung" as TabType, label: "MITARBEITER-LISTE", icon: Users },
     ...(isAdmin ? [{ id: "verwaltung" as TabType, label: "VERWALTUNG", icon: Settings }] : []),
   ];
 
@@ -128,11 +126,7 @@ export default function Index() {
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
               }`}
             >
-              {tab.emoji ? (
-                <span>{tab.emoji}</span>
-              ) : (
-                <tab.icon className="h-4 w-4" />
-              )}
+              <tab.icon className="h-4 w-4" />
               {tab.label}
             </button>
           ))}
@@ -141,11 +135,9 @@ export default function Index() {
 
       {/* Main Content */}
       <main className="p-6">
-        {activeTab === "leitstellenblatt" && <LeitstellenblattTab />}
-
         {activeTab === "strafkatalog" && <StrafkatalogTab />}
         {activeTab === "personalabteilung" && <PersonalabteilungTab />}
-        {activeTab === "verwaltung" && isAdmin && <UserManagement />}
+        {activeTab === "verwaltung" && isAdmin && <VerwaltungTab />}
       </main>
 
       {/* Footer */}
