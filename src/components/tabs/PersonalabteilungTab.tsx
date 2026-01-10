@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { logAudit } from "@/lib/auditLog";
 
 interface Mitarbeiter {
   id: string;
@@ -122,6 +123,9 @@ export function PersonalabteilungTab() {
     }
 
     if (editingId) {
+      // Get old data for audit
+      const oldMitarbeiter = mitarbeiter.find(m => m.id === editingId);
+      
       // Update existing
       const { error } = await supabase
         .from("mitarbeiter")
@@ -154,6 +158,16 @@ export function PersonalabteilungTab() {
       });
       setMitarbeiter(updated);
       toast.success("Mitarbeiter aktualisiert!");
+      
+      // Log audit
+      await logAudit({
+        action: "UPDATE",
+        tableName: "mitarbeiter",
+        recordId: editingId,
+        oldData: oldMitarbeiter,
+        newData: formData,
+        description: `Mitarbeiter "${formData.name}" bearbeitet`,
+      });
     } else {
       // Create new
       const { data, error } = await supabase
@@ -187,6 +201,15 @@ export function PersonalabteilungTab() {
         });
         setMitarbeiter(updated);
         toast.success("Mitarbeiter hinzugefügt!");
+        
+        // Log audit
+        await logAudit({
+          action: "INSERT",
+          tableName: "mitarbeiter",
+          recordId: data.id,
+          newData: data,
+          description: `Mitarbeiter "${data.name}" hinzugefügt`,
+        });
       }
     }
     clearForm();
@@ -198,6 +221,8 @@ export function PersonalabteilungTab() {
   };
 
   const handleDelete = async (id: string) => {
+    const mitarbeiterToDelete = mitarbeiter.find(m => m.id === id);
+    
     const { error } = await supabase
       .from("mitarbeiter")
       .delete()
@@ -210,6 +235,17 @@ export function PersonalabteilungTab() {
 
     setMitarbeiter(mitarbeiter.filter(m => m.id !== id));
     toast.success("Mitarbeiter gelöscht!");
+    
+    // Log audit
+    if (mitarbeiterToDelete) {
+      await logAudit({
+        action: "DELETE",
+        tableName: "mitarbeiter",
+        recordId: id,
+        oldData: mitarbeiterToDelete,
+        description: `Mitarbeiter "${mitarbeiterToDelete.name}" gelöscht`,
+      });
+    }
   };
 
   const filteredMitarbeiter = mitarbeiter.filter(m =>
