@@ -49,6 +49,15 @@ serve(async (req) => {
       );
     }
 
+    // Get caller's display name for audit log
+    const { data: callerProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("display_name, email")
+      .eq("id", callingUser.id)
+      .single();
+
+    const callerName = callerProfile?.display_name || callerProfile?.email || callingUser.email || "Unbekannt";
+
     const { userId } = await req.json();
     
     if (!userId) {
@@ -57,6 +66,16 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Get user data before deletion for audit log
+    const { data: userToDelete } = await supabaseAdmin
+      .from("profiles")
+      .select("display_name, email")
+      .eq("id", userId)
+      .single();
+
+    const deletedUserName = userToDelete?.display_name || userToDelete?.email || "Unbekannt";
+    const deletedUserEmail = userToDelete?.email || "Unbekannt";
 
     // Delete user from auth (this will cascade delete profile and roles due to ON DELETE CASCADE)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
@@ -67,6 +86,17 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Log audit entry
+    await supabaseAdmin.from("audit_logs").insert({
+      user_id: callingUser.id,
+      user_name: callerName,
+      action: "DELETE",
+      table_name: "users",
+      record_id: userId,
+      old_data: { display_name: deletedUserName, email: deletedUserEmail },
+      description: `Benutzer "${deletedUserName}" (${deletedUserEmail}) gelöscht`,
+    });
 
     return new Response(
       JSON.stringify({ success: true, message: "User deleted successfully" }),

@@ -53,6 +53,33 @@ export type Database = {
         }
         Relationships: []
       }
+      dokumente: {
+        Row: {
+          created_at: string
+          created_by: string
+          created_by_name: string
+          id: string
+          title: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          created_by_name: string
+          id?: string
+          title: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          created_by_name?: string
+          id?: string
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
       einheiten: {
         Row: {
           created_at: string

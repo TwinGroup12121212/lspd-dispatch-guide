@@ -50,6 +50,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Get caller's display name for audit log
+    const { data: callerProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("display_name, email")
+      .eq("id", caller.id)
+      .single();
+
+    const callerName = callerProfile?.display_name || callerProfile?.email || caller.email || "Unbekannt";
+
     // Get request body
     const { email, password, displayName } = await req.json();
 
@@ -84,6 +93,17 @@ Deno.serve(async (req) => {
         .from("profiles")
         .update({ must_change_password: true })
         .eq("id", newUser.user.id);
+
+      // Log audit entry
+      await supabaseAdmin.from("audit_logs").insert({
+        user_id: caller.id,
+        user_name: callerName,
+        action: "INSERT",
+        table_name: "users",
+        record_id: newUser.user.id,
+        new_data: { email, display_name: displayName },
+        description: `Benutzer "${displayName}" (${email}) erstellt`,
+      });
     }
 
     return new Response(
