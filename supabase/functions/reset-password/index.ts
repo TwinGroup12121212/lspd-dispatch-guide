@@ -66,6 +66,15 @@ serve(async (req) => {
       );
     }
 
+    // Get caller's display name for audit log
+    const { data: callerProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("display_name, email")
+      .eq("id", callingUser.id)
+      .single();
+
+    const callerName = callerProfile?.display_name || callerProfile?.email || callingUser.email || "Unbekannt";
+
     const { userId } = await req.json();
     
     if (!userId) {
@@ -74,6 +83,16 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Get target user data for audit log
+    const { data: targetUser } = await supabaseAdmin
+      .from("profiles")
+      .select("display_name, email")
+      .eq("id", userId)
+      .single();
+
+    const targetUserName = targetUser?.display_name || targetUser?.email || "Unbekannt";
+    const targetUserEmail = targetUser?.email || "Unbekannt";
 
     // Generate new password
     const newPassword = generatePassword();
@@ -101,6 +120,17 @@ serve(async (req) => {
     if (profileError) {
       console.error("Error updating profile:", profileError);
     }
+
+    // Log audit entry
+    await supabaseAdmin.from("audit_logs").insert({
+      user_id: callingUser.id,
+      user_name: callerName,
+      action: "UPDATE",
+      table_name: "users",
+      record_id: userId,
+      new_data: { password_reset: true },
+      description: `Passwort für Benutzer "${targetUserName}" (${targetUserEmail}) zurückgesetzt`,
+    });
 
     console.log(`Password reset for user ${userId} by admin ${callingUser.id}`);
 

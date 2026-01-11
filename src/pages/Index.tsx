@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Scale, Users, LogOut, Shield, Settings, Clock } from "lucide-react";
+import { Scale, Users, LogOut, Shield, Settings, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +8,10 @@ import { toast } from "sonner";
 import { StrafkatalogTab } from "@/components/tabs/StrafkatalogTab";
 import { PersonalabteilungTab } from "@/components/tabs/PersonalabteilungTab";
 import { VerwaltungTab } from "@/components/VerwaltungTab";
+import { DokumenteTab } from "@/components/tabs/DokumenteTab";
 import { useAuth } from "@/hooks/useAuth";
 
-type TabType = "strafkatalog" | "personalabteilung" | "verwaltung";
+type TabType = "strafkatalog" | "personalabteilung" | "dokumente" | "verwaltung";
 
 export default function Index() {
   const { user, isAdmin, isLoading, displayName, signOut } = useAuth();
@@ -46,6 +47,7 @@ export default function Index() {
   const tabs = [
     { id: "strafkatalog" as TabType, label: "STRAFKATALOG", icon: Scale },
     { id: "personalabteilung" as TabType, label: "MITARBEITER-LISTE", icon: Users },
+    { id: "dokumente" as TabType, label: "DOKUMENTE", icon: FileText },
     ...(isAdmin ? [{ id: "verwaltung" as TabType, label: "VERWALTUNG", icon: Settings }] : []),
   ];
 
@@ -137,6 +139,7 @@ export default function Index() {
       <main className="p-6">
         {activeTab === "strafkatalog" && <StrafkatalogTab />}
         {activeTab === "personalabteilung" && <PersonalabteilungTab />}
+        {activeTab === "dokumente" && <DokumenteTab />}
         {activeTab === "verwaltung" && isAdmin && <VerwaltungTab />}
       </main>
 
