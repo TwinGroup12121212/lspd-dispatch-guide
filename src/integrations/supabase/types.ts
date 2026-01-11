@@ -53,12 +53,34 @@ export type Database = {
         }
         Relationships: []
       }
+      dokument_kategorien: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       dokumente: {
         Row: {
           created_at: string
           created_by: string
           created_by_name: string
           id: string
+          kategorie_id: string | null
           title: string
           url: string
         }
@@ -67,6 +89,7 @@ export type Database = {
           created_by: string
           created_by_name: string
           id?: string
+          kategorie_id?: string | null
           title: string
           url: string
         }
@@ -75,10 +98,19 @@ export type Database = {
           created_by?: string
           created_by_name?: string
           id?: string
+          kategorie_id?: string | null
           title?: string
           url?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "dokumente_kategorie_id_fkey"
+            columns: ["kategorie_id"]
+            isOneToOne: false
+            referencedRelation: "dokument_kategorien"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       einheiten: {
         Row: {
