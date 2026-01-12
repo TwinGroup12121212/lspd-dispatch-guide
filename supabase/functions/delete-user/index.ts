@@ -61,14 +61,14 @@ serve(async (req) => {
     }
 
     // Check if caller is admin
-    const { data: roleData } = await supabaseAdmin
+    const { data: roleData, error: roleError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
       .eq("user_id", callingUser.id)
       .eq("role", "admin")
-      .single();
+      .maybeSingle();
 
-    if (!roleData) {
+    if (roleError || !roleData) {
       return new Response(
         JSON.stringify({ error: "Only admins can delete users" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -80,7 +80,7 @@ serve(async (req) => {
       .from("profiles")
       .select("display_name, email")
       .eq("id", callingUser.id)
-      .single();
+      .maybeSingle();
 
     const callerName = callerProfile?.display_name || callerProfile?.email || callingUser.email || "Unbekannt";
 
@@ -89,15 +89,56 @@ serve(async (req) => {
       .from("profiles")
       .select("display_name, email")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
 
     const deletedUserName = userToDelete?.display_name || userToDelete?.email || "Unbekannt";
     const deletedUserEmail = userToDelete?.email || "Unbekannt";
 
-    // Delete user from auth (this will cascade delete profile and roles due to ON DELETE CASCADE)
+    // IMPORTANT: clean up dependent rows first (FKs to auth.users can otherwise block deletion)
+    const { error: nullUpdatedByError } = await supabaseAdmin
+      .from("leitstellenblatt")
+      .update({ updated_by: null })
+      .eq("updated_by", userId);
+
+    if (nullUpdatedByError) {
+      console.error("Error nulling updated_by:", nullUpdatedByError);
+      return new Response(
+        JSON.stringify({ error: "Database error preparing user deletion" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { error: deleteRolesError } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId);
+
+    if (deleteRolesError) {
+      console.error("Error deleting user_roles:", deleteRolesError);
+      return new Response(
+        JSON.stringify({ error: "Database error preparing user deletion" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { error: deleteProfileError } = await supabaseAdmin
+      .from("profiles")
+      .delete()
+      .eq("id", userId);
+
+    if (deleteProfileError) {
+      console.error("Error deleting profile:", deleteProfileError);
+      return new Response(
+        JSON.stringify({ error: "Database error preparing user deletion" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Delete user from authentication system
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (deleteError) {
+      console.error("Error deleting auth user:", deleteError);
       return new Response(
         JSON.stringify({ error: deleteError.message }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
