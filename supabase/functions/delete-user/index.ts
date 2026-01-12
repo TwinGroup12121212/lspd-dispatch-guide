@@ -138,11 +138,17 @@ serve(async (req) => {
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (deleteError) {
-      console.error("Error deleting auth user:", deleteError);
-      return new Response(
-        JSON.stringify({ error: deleteError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // If user is already deleted from auth (404), treat as success
+      const errorMessage = deleteError.message?.toLowerCase() || "";
+      if (errorMessage.includes("not found") || errorMessage.includes("user not found")) {
+        console.log("User already deleted from auth system, treating as success");
+      } else {
+        console.error("Error deleting auth user:", deleteError);
+        return new Response(
+          JSON.stringify({ error: deleteError.message }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Log audit entry
