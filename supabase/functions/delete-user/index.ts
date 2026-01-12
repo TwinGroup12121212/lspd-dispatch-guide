@@ -22,12 +22,38 @@ serve(async (req) => {
       },
     });
 
+    // Get userId from body first
+    const { userId } = await req.json();
+    
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "userId is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid userId format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Verify the calling user is an admin
-    const authHeader = req.headers.get("Authorization")!;
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     const token = authHeader.replace("Bearer ", "");
     
-    const { data: { user: callingUser } } = await supabaseAdmin.auth.getUser(token);
-    if (!callingUser) {
+    const { data: { user: callingUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !callingUser) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -57,15 +83,6 @@ serve(async (req) => {
       .single();
 
     const callerName = callerProfile?.display_name || callerProfile?.email || callingUser.email || "Unbekannt";
-
-    const { userId } = await req.json();
-    
-    if (!userId) {
-      return new Response(
-        JSON.stringify({ error: "userId is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     // Get user data before deletion for audit log
     const { data: userToDelete } = await supabaseAdmin
